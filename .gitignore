@@ -29,7 +29,7 @@
 **/*$py.class
 
 # klogger_tool.py measure の CSV 出力 (実機テスト成果物、リポジトリには含めない)
-software/python/*.csv
+**/software/python/*.csv
 
 ##### ハードウェア/一般 用の除外設定 #####
 *.bak
