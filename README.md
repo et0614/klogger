@@ -15,21 +15,25 @@ v2 からの主な変更点は以下のとおり（開発中）。
 
 旧版（v2）は [v2/](v2/README.md) を参照。
 
+![K-Logger v3 基板（3D）](docs/images/3d_top.png)
+
 ## ディレクトリ構成
 
 ```
-docs/                 仕様・設計メモ・取扱説明書
+docs/
+  images/               基板・3D外観画像
 hardware/
-  bom/BOM.xlsx        設計用部品表（JLCPCB部品番号・リンク付き）
-  pcb/                Fusionアーカイブ(.f3z)、回路図PDF
-  fab/rev-X/          JLCPCB入稿一式（ガーバー、JLCPCB_BOM、CPL）基板リビジョンごと
-  datasheet/          主要部品データシート
-firmware/klogger.X/   MPLAB X プロジェクト（AVR64DU32）
-software/python/      PC側ツール（USB-CDC通信、データ読出し→CSV）
-v2/                   旧版 K-Logger v2 一式（凍結）
+  BOM.xlsx              設計用部品表（JLCPCB部品番号・リンク付き）
+  datasheets/           主要部品データシート（ファイル名=参照記号）
+  pcb/                  Fusion設計データ(klogger.f3z)、回路図PDF
+  fab/                  JLCPCB入稿データ（ガーバー、JLCPCB_BOM.xlsx、JLCPCB_CPL.xlsx）
+firmware/klogger.X/     MPLAB X プロジェクト（AVR64DU32）※作成予定
+software/python/        PC側ツール（USB-CDC通信、データ読出し→CSV）※作成予定
+v2/                     旧版 K-Logger v2 一式（凍結）
 ```
 
 ## バージョン
 
 - 製品世代: K-Logger v3（v2 の後継）
+- 基板: 3.0（シルク表記「Version 3.0」）。修正ごとに 3.1, 3.2 … と上げる。リポジトリには最新版のみを置き、過去の版は Git の履歴で参照する
 - ファームウェア: 3.0.0 から開始（`ID?` 応答例: `K-Logger v3.0.0`）
