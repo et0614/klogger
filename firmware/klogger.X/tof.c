@@ -3,6 +3,7 @@
 #include "VL53L1X/VL53L1X_api.h"
 #include "mcc_generated_files/system/system.h"
 #include "mcc_generated_files/timer/delay.h"
+#include <math.h>
 
 #define DEV 0x29   // ULD API の dev 引数 (platform層では未使用)
 
@@ -127,7 +128,7 @@ bool Tof_MeasureOnce(TofResult_t *res, uint16_t timeout_ms)
     return got;
 }
 
-bool Tof_CalibrateOffset(uint16_t target_mm, uint8_t samples, int16_t *offset)
+bool Tof_CalibrateOffset(uint16_t target_mm, uint8_t samples, TofCalib_t *res)
 {
     if (samples == 0) return false;
     if (!s_powered && !Tof_PowerOn()) return false;
@@ -135,7 +136,10 @@ bool Tof_CalibrateOffset(uint16_t target_mm, uint8_t samples, int16_t *offset)
     // オフセット0の状態で生の距離を測る
     if (!ok(VL53L1X_SetOffset(DEV, 0))) return false;
 
+    // 平均と標準偏差 (桁あふれ防止のため1個目からの差で積算)
     int32_t sum = 0;
+    int64_t sumsq = 0;
+    int16_t first = 0;
     uint8_t n = 0;
     VL53L1X_StopRanging(DEV);
     VL53L1X_SetInterMeasurementInMs(DEV, EM_settings.tof_tb_ms + 5);
@@ -146,7 +150,12 @@ bool Tof_CalibrateOffset(uint16_t target_mm, uint8_t samples, int16_t *offset)
         if (!TOF_GPIO_GetValue())
         {
             TofResult_t r;
-            if (readResult(&r) && r.status == 0) { sum += r.distance_mm; n++; }
+            if (readResult(&r) && r.status == 0)
+            {
+                if (n == 0) first = (int16_t)r.distance_mm;
+                int32_t d = (int32_t)r.distance_mm - first;
+                sum += d; sumsq += d * d; n++;
+            }
         }
         else DELAY_milliseconds(1);
     }
@@ -158,8 +167,14 @@ bool Tof_CalibrateOffset(uint16_t target_mm, uint8_t samples, int16_t *offset)
         return false;
     }
 
-    *offset = (int16_t)((int32_t)target_mm - sum / n);
-    EM_settings.tof_offset_mm = *offset;
+    float mean_d = (float)sum / n;
+    float var = (float)sumsq / n - mean_d * mean_d;
+    res->n        = n;
+    res->raw_mm   = (uint16_t)(first + (int32_t)lroundf(mean_d));
+    res->std_x10  = (uint16_t)lroundf(sqrtf(var > 0 ? var : 0) * 10.0f);
+    res->prev_mm  = EM_settings.tof_offset_mm;
+    res->offset_mm = (int16_t)((int32_t)target_mm - (int32_t)res->raw_mm);
+    EM_settings.tof_offset_mm = res->offset_mm;
     EM_saveSettings();
-    return ok(VL53L1X_SetOffset(DEV, *offset));
+    return ok(VL53L1X_SetOffset(DEV, res->offset_mm));
 }

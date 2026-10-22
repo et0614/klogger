@@ -237,7 +237,8 @@ static void ph_get_tof(int32_t id, const char *json,
     reply_tof(id);
 }
 
-// 測距条件の設定: params { "mode":"short"|"long", "tb_ms":15|20|33|50|100|200|500, "roi":4..16 }
+// 測距条件の設定: params { "mode":"short"|"long", "tb_ms":15|20|33|50|100|200|500, "roi":4..16,
+//                          "offset_mm":-500..500 }
 // 指定した項目だけ変更する。Longモードは tb_ms>=20。
 static void ph_set_tof(int32_t id, const char *json,
                        const jsmntok_t *t, int ntok, int params)
@@ -258,6 +259,14 @@ static void ph_set_tof(int32_t id, const char *json,
     if (tt >= 0) tb = (uint16_t)tok_int(json, &t[tt]);
     int rt = obj_get(json, t, ntok, params, "roi");
     if (rt >= 0) roi = (uint8_t)tok_int(json, &t[rt]);
+    int16_t offset = EM_settings.tof_offset_mm;
+    int ot = obj_get(json, t, ntok, params, "offset_mm");
+    if (ot >= 0)
+    {
+        int32_t v = tok_int(json, &t[ot]);
+        if (v < -500 || v > 500) { reply_error(id, "invalid_offset"); return; }
+        offset = (int16_t)v;
+    }
 
     bool tb_ok = (tb == 15 || tb == 20 || tb == 33 || tb == 50 || tb == 100 || tb == 200 || tb == 500);
     if (!tb_ok || (mode == TOF_MODE_LONG && tb == 15)) { reply_error(id, "invalid_tb_ms"); return; }
@@ -266,6 +275,7 @@ static void ph_set_tof(int32_t id, const char *json,
     EM_settings.tof_mode  = mode;
     EM_settings.tof_tb_ms = tb;
     EM_settings.tof_roi   = roi;
+    EM_settings.tof_offset_mm = offset;
     EM_saveSettings();
     if (Tof_IsPowered() && !Tof_ApplySettings()) { reply_error(id, "sensor_error"); return; }
     reply_tof(id);
@@ -280,10 +290,12 @@ static void ph_calibrate(int32_t id, const char *json,
     int32_t mm = tok_int(json, &t[mt]);
     if (mm < 10 || mm > 1000) { reply_error(id, "invalid_mm"); return; }
 
-    int16_t offset = 0;
-    if (!Tof_CalibrateOffset((uint16_t)mm, 50, &offset)) { reply_error(id, "calibration_failed"); return; }
+    TofCalib_t c;
+    if (!Tof_CalibrateOffset((uint16_t)mm, 50, &c)) { reply_error(id, "calibration_failed"); return; }
     char b[JP_REPLY_CAP];
-    snprintf(b, sizeof(b), "{\"id\":%ld,\"ok\":true,\"offset_mm\":%d}\n", (long)id, (int)offset);
+    snprintf(b, sizeof(b),
+        "{\"id\":%ld,\"ok\":true,\"offset_mm\":%d,\"prev_offset_mm\":%d,\"raw_mm\":%u,\"std_x10\":%u,\"n\":%u}\n",
+        (long)id, (int)c.offset_mm, (int)c.prev_mm, (unsigned)c.raw_mm, (unsigned)c.std_x10, (unsigned)c.n);
     send_line(b);
 }
 

@@ -14,7 +14,8 @@ USB接続した K-Logger v3 の設定・記録開始・データ読み出しを�
     python klogger.py read --daily 出力フォルダ  日ごとのCSV (v2互換: yyyyMMdd.csv, "HH:MM:SS,距離")
     python klogger.py measure [-n 回数]       距離を連続表示 (保存しない, Ctrl+Cで終了)
     python klogger.py calibrate 距離mm        オフセット校正 (対象物を指定距離に置いて実行)
-    python klogger.py tof [--mode short|long] [--tb ms] [--roi n]  測距条件の表示/変更
+    python klogger.py tof [--mode short|long] [--tb ms] [--roi n] [--offset mm]  測距条件の表示/変更
+    (GUI版: python klogger_gui.py)
     python klogger.py selftest                フラッシュ/距離センサの自己診断
     python klogger.py clear                   保存データの消去
     共通オプション: -p COM3 (ポート指定。省略時は自動検出)
@@ -105,15 +106,15 @@ class KLogger:
         return None
 
     def request(self, command, params=None, wait_s=3.0):
-        """コマンドを送り応答(dict)を返す。応答が無ければ RuntimeError。"""
+        """コマンドを送り応答(dict)を返す。応答が無い・エラー応答なら RuntimeError。"""
         rid = self._send(command, params)
         while True:
             j = self._read_json_line(wait_s)
             if j is None:
-                raise RuntimeError(f"{command}: 応答がありません")
+                raise RuntimeError(f"{command}: no response")
             if j.get("id") == rid:
                 if not j.get("ok", False) and "error" in j:
-                    raise RuntimeError(f"{command}: エラー {j['error']}")
+                    raise RuntimeError(f"{command}: {j['error']}")
                 return j
 
     def dump_range(self, start, count, progress=None):
@@ -121,7 +122,7 @@ class KLogger:
         rid = self._send("dump_range", {"start": start, "count": count})
         hdr = self._read_json_line(5.0)
         if not hdr or hdr.get("id") != rid or hdr.get("dump") != "begin":
-            raise RuntimeError(f"dumpヘッダの取得に失敗しました: {hdr}")
+            raise RuntimeError(f"dump: invalid header {hdr}")
         n = hdr.get("count", 0)
         nbytes = n * hdr.get("rec_size", 2)
         raw = bytearray()
@@ -139,8 +140,54 @@ class KLogger:
                     break
         self._read_json_line(3.0)  # フッタ
         if len(raw) < nbytes:
-            raise RuntimeError(f"受信が不足しました: {len(raw)}/{nbytes} バイト")
+            raise RuntimeError(f"dump: incomplete data {len(raw)}/{nbytes} bytes")
         return hdr, list(struct.unpack(f"<{n}H", bytes(raw)))
+
+    def download(self, progress=None):
+        """保存データを全件読み出す。
+        @param progress progress(受信済み件数, 全件数) を随時呼ぶ
+        @return (start_dt, interval, records[uint16]) 。0件なら records は空。"""
+        s = self.request("get_status")
+        total = s["count"]
+        if total == 0:
+            return s.get("start_dt", 0), s["interval"], []
+        recs = []
+        hdr = None
+        for start in range(0, total, DUMP_CHUNK):
+            cnt = min(DUMP_CHUNK, total - start)
+            cb = (lambda n, base=start: progress(base + n, total)) if progress else None
+            hdr, part = self.dump_range(start, cnt, cb)
+            recs += part
+        return hdr["start_dt"], hdr["interval"], recs
+
+
+def write_csv(path, start_dt, interval, recs):
+    """CSV (index, epoch, datetime, distance_mm, status) を書く"""
+    with open(path, "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["index", "epoch", "datetime", "distance_mm", "status"])
+        for i, v in enumerate(recs):
+            ts = start_dt + i * interval
+            dist, st = decode_record(v)
+            w.writerow([i, ts, fmt_time(ts), "" if dist is None else dist, st])
+
+
+def write_daily_csv(folder, start_dt, interval, recs):
+    """v2互換: 日ごとのファイル yyyyMMdd.csv に "HH:MM:SS,距離[mm]" を書く。@return ファイル数"""
+    os.makedirs(folder, exist_ok=True)
+    files = {}
+    try:
+        for i, v in enumerate(recs):
+            ts = datetime.fromtimestamp(start_dt + i * interval)
+            name = ts.strftime("%Y%m%d.csv")
+            if name not in files:
+                files[name] = open(os.path.join(folder, name), "w", newline="")
+            dist, _ = decode_record(v)
+            files[name].write(f"{ts.strftime('%H:%M:%S')},{'' if dist is None else dist}\r\n")
+    finally:
+        for f in files.values():
+            f.close()
+    return len(files)
 
 
 def find_port():
@@ -201,53 +248,26 @@ def cmd_stop(dev, args):
     print("記録を停止しました。")
 
 
+def default_csv_name(device_id, start_dt):
+    return f"klogger_{device_id}_{datetime.fromtimestamp(start_dt).strftime('%Y%m%d_%H%M%S')}.csv"
+
+
 def cmd_read(dev, args):
-    s = dev.request("get_status")
-    total = s["count"]
-    if total == 0:
+    def progress(n, total):
+        print(f"\r受信中... {n:,}/{total:,}", end="", flush=True)
+    start_dt, interval, recs = dev.download(progress)
+    if not recs:
         print("保存データがありません (0件)。")
         return
-    print(f"{total:,} 件を読み出します...")
-    recs = []
-    hdr = None
-    for start in range(0, total, DUMP_CHUNK):
-        cnt = min(DUMP_CHUNK, total - start)
-        def progress(n, base=start):
-            print(f"\r受信中... {base + n:,}/{total:,}", end="", flush=True)
-        hdr, part = dev.dump_range(start, cnt, progress)
-        recs += part
     print()
-    start_dt, interval = hdr["start_dt"], hdr["interval"]
     n_failed = sum(1 for v in recs if v == REC_FAILED)
 
     if args.daily:
-        # v2互換: 日ごとのファイル yyyyMMdd.csv に "HH:MM:SS,距離[mm]"
-        os.makedirs(args.daily, exist_ok=True)
-        files = {}
-        try:
-            for i, v in enumerate(recs):
-                ts = datetime.fromtimestamp(start_dt + i * interval)
-                name = ts.strftime("%Y%m%d.csv")
-                if name not in files:
-                    files[name] = open(os.path.join(args.daily, name), "w", newline="")
-                dist, _ = decode_record(v)
-                files[name].write(f"{ts.strftime('%H:%M:%S')},{'' if dist is None else dist}\r\n")
-        finally:
-            for f in files.values():
-                f.close()
-        print(f"{len(files)} 個のファイルを {args.daily} に保存しました。")
+        n = write_daily_csv(args.daily, start_dt, interval, recs)
+        print(f"{n} 個のファイルを {args.daily} に保存しました。")
     else:
-        out = args.output
-        if not out:
-            did = dev.request("get_id").get("device_id", "")
-            out = f"klogger_{did}_{datetime.fromtimestamp(start_dt).strftime('%Y%m%d_%H%M%S')}.csv"
-        with open(out, "w", newline="") as f:
-            w = csv.writer(f)
-            w.writerow(["index", "epoch", "datetime", "distance_mm", "status"])
-            for i, v in enumerate(recs):
-                ts = start_dt + i * interval
-                dist, st = decode_record(v)
-                w.writerow([i, ts, fmt_time(ts), "" if dist is None else dist, st])
+        out = args.output or default_csv_name(dev.request("get_id").get("device_id", ""), start_dt)
+        write_csv(out, start_dt, interval, recs)
         print(f"CSV保存: {out}")
     print(f"{len(recs):,} 件 (計測失敗 {n_failed} 件)  {fmt_time(start_dt)} 〜 "
           f"{fmt_time(start_dt + (len(recs) - 1) * interval)}")
@@ -271,7 +291,9 @@ def cmd_measure(dev, args):
 def cmd_calibrate(dev, args):
     print(f"{args.mm} mm の位置に対象物(反射率17%程度のグレーが標準)を置いた状態で校正します...")
     r = dev.request("calibrate", {"mm": args.mm}, wait_s=60.0)
-    print(f"校正完了: オフセット {r['offset_mm']} mm (機器に保存しました)")
+    print(f"校正完了: オフセット {r.get('prev_offset_mm', '?')} → {r['offset_mm']} mm (機器に保存しました)")
+    if "raw_mm" in r:
+        print(f"  測定平均(オフセット0) {r['raw_mm']} mm, 標準偏差 {r['std_x10'] / 10:.1f} mm, {r['n']} 回")
 
 
 def cmd_tof(dev, args):
@@ -282,6 +304,8 @@ def cmd_tof(dev, args):
         params["tb_ms"] = args.tb
     if args.roi:
         params["roi"] = args.roi
+    if args.offset is not None:
+        params["offset_mm"] = args.offset
     t = dev.request("set_tof", params) if params else dev.request("get_tof")
     print(f"測距条件: {t['mode']} / {t['tb_ms']}ms / ROI {t['roi']}x{t['roi']} / オフセット {t['offset_mm']}mm")
 
@@ -323,6 +347,7 @@ def main():
     p.add_argument("--mode", choices=["short", "long"])
     p.add_argument("--tb", type=int, choices=[15, 20, 33, 50, 100, 200, 500], help="タイミングバジェット [ms]")
     p.add_argument("--roi", type=int, help="受光領域 4〜16")
+    p.add_argument("--offset", type=int, help="距離オフセット [mm] (-500〜500, FW 3.1.0以降)")
     sub.add_parser("selftest", help="自己診断")
     sub.add_parser("clear", help="保存データの消去")
     args = ap.parse_args()

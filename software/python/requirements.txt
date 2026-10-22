@@ -1,1 +1,3 @@
 pyserial>=3.5
+# exe 化 (build_exe.bat) するときのみ
+# pyinstaller

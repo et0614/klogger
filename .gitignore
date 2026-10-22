@@ -462,3 +462,6 @@ FodyWeavers.xsd
 
 # 診断用ビルド (コミットしない)
 firmware/diag/
+
+# PyInstaller (build_exe.bat) の生成物
+software/python/*.spec

@@ -54,10 +54,19 @@ bool Tof_ReadIfReady(TofResult_t *res);
 /// 1回測定して返す (内部で開始→完了待ち(最大timeout_ms)→停止)。
 bool Tof_MeasureOnce(TofResult_t *res, uint16_t timeout_ms);
 
+/// オフセット校正の結果
+typedef struct {
+    int16_t  offset_mm;   // 新しいオフセット [mm]
+    int16_t  prev_mm;     // 校正前のオフセット [mm]
+    uint16_t raw_mm;      // オフセット0での平均距離 [mm]
+    uint16_t std_x10;     // 距離の標準偏差 [0.1mm]
+    uint8_t  n;           // 有効サンプル数
+} TofCalib_t;
+
 /// オフセット校正: target_mm の位置に対象物を置いた状態で samples 回測定し、
 /// オフセット = target - 平均距離 を求めてセンサと EM_settings に設定・保存する。
 /// @return true:成功
-bool Tof_CalibrateOffset(uint16_t target_mm, uint8_t samples, int16_t *offset);
+bool Tof_CalibrateOffset(uint16_t target_mm, uint8_t samples, TofCalib_t *res);
 
 #ifdef __cplusplus
 }
