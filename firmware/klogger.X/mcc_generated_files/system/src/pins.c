@@ -51,7 +51,7 @@ static void (*IO_PD5_InterruptHandler)(void);
 static void (*IO_PD6_InterruptHandler)(void);
 static void (*IO_PD7_InterruptHandler)(void);
 static void (*VBUS_DET_InterruptHandler)(void);
-static void (*IO_PF5_InterruptHandler)(void);
+static void (*IO_PF3_InterruptHandler)(void);
 static void (*FLASH_CS_InterruptHandler)(void);
 static void (*LED_InterruptHandler)(void);
 static void (*TOF_XSHUT_InterruptHandler)(void);
@@ -69,7 +69,7 @@ void PIN_MANAGER_Initialize()
     PORTA.DIR = 0x51;
     PORTC.DIR = 0x8;
     PORTD.DIR = 0x0;
-    PORTF.DIR = 0x8;
+    PORTF.DIR = 0x10;
 
   /* PINxCTRL registers Initialization */
     PORTA.PIN0CTRL = 0x0;
@@ -99,8 +99,8 @@ void PIN_MANAGER_Initialize()
     PORTF.PIN0CTRL = 0x0;
     PORTF.PIN1CTRL = 0x0;
     PORTF.PIN2CTRL = 0x1;
-    PORTF.PIN3CTRL = 0x0;
-    PORTF.PIN4CTRL = 0x4;
+    PORTF.PIN3CTRL = 0x4;
+    PORTF.PIN4CTRL = 0x0;
     PORTF.PIN5CTRL = 0x4;
     PORTF.PIN6CTRL = 0x0;
     PORTF.PIN7CTRL = 0x0;
@@ -132,7 +132,7 @@ void PIN_MANAGER_Initialize()
     IO_PD6_SetInterruptHandler(IO_PD6_DefaultInterruptHandler);
     IO_PD7_SetInterruptHandler(IO_PD7_DefaultInterruptHandler);
     VBUS_DET_SetInterruptHandler(VBUS_DET_DefaultInterruptHandler);
-    IO_PF5_SetInterruptHandler(IO_PF5_DefaultInterruptHandler);
+    IO_PF3_SetInterruptHandler(IO_PF3_DefaultInterruptHandler);
     FLASH_CS_SetInterruptHandler(FLASH_CS_DefaultInterruptHandler);
     LED_SetInterruptHandler(LED_DefaultInterruptHandler);
     TOF_XSHUT_SetInterruptHandler(TOF_XSHUT_DefaultInterruptHandler);
@@ -360,17 +360,17 @@ void VBUS_DET_DefaultInterruptHandler(void)
     // or set custom function using VBUS_DET_SetInterruptHandler()
 }
 /**
-  Allows selecting an interrupt handler for IO_PF5 at application runtime
+  Allows selecting an interrupt handler for IO_PF3 at application runtime
 */
-void IO_PF5_SetInterruptHandler(void (* interruptHandler)(void)) 
+void IO_PF3_SetInterruptHandler(void (* interruptHandler)(void)) 
 {
-    IO_PF5_InterruptHandler = interruptHandler;
+    IO_PF3_InterruptHandler = interruptHandler;
 }
 
-void IO_PF5_DefaultInterruptHandler(void)
+void IO_PF3_DefaultInterruptHandler(void)
 {
-    // add your IO_PF5 interrupt custom code
-    // or set custom function using IO_PF5_SetInterruptHandler()
+    // add your IO_PF3 interrupt custom code
+    // or set custom function using IO_PF3_SetInterruptHandler()
 }
 /**
   Allows selecting an interrupt handler for FLASH_CS at application runtime
@@ -503,7 +503,7 @@ ISR(PORTD_PORT_vect)
 ISR(PORTF_PORT_vect)
 { 
     // Call the interrupt handler for the callback registered at runtime
-    if(VPORTF.INTFLAGS & PORT_INT4_bm)
+    if(VPORTF.INTFLAGS & PORT_INT5_bm)
     {
        VBAT_InterruptHandler(); 
     }
@@ -511,11 +511,11 @@ ISR(PORTF_PORT_vect)
     {
        VBUS_DET_InterruptHandler(); 
     }
-    if(VPORTF.INTFLAGS & PORT_INT5_bm)
-    {
-       IO_PF5_InterruptHandler(); 
-    }
     if(VPORTF.INTFLAGS & PORT_INT3_bm)
+    {
+       IO_PF3_InterruptHandler(); 
+    }
+    if(VPORTF.INTFLAGS & PORT_INT4_bm)
     {
        TOF_XSHUT_InterruptHandler(); 
     }

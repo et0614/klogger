@@ -96,23 +96,23 @@
 #define PA6_SetInterruptHandler SCK_SetInterruptHandler
 
 //get/set VBAT aliases
-#define VBAT_SetHigh() do { PORTF_OUTSET = 0x10; } while(0)
-#define VBAT_SetLow() do { PORTF_OUTCLR = 0x10; } while(0)
-#define VBAT_Toggle() do { PORTF_OUTTGL = 0x10; } while(0)
-#define VBAT_GetValue() (VPORTF.IN & (0x1 << 4))
-#define VBAT_SetDigitalInput() do { PORTF_DIRCLR = 0x10; } while(0)
-#define VBAT_SetDigitalOutput() do { PORTF_DIRSET = 0x10; } while(0)
-#define VBAT_SetPullUp() do { PORTF_PIN4CTRL  |= PORT_PULLUPEN_bm; } while(0)
-#define VBAT_ResetPullUp() do { PORTF_PIN4CTRL  &= ~PORT_PULLUPEN_bm; } while(0)
-#define VBAT_SetInverted() do { PORTF_PIN4CTRL  |= PORT_INVEN_bm; } while(0)
-#define VBAT_ResetInverted() do { PORTF_PIN4CTRL  &= ~PORT_INVEN_bm; } while(0)
-#define VBAT_DisableInterruptOnChange() do { PORTF.PIN4CTRL = (PORTF.PIN4CTRL & ~PORT_ISC_gm) | 0x0 ; } while(0)
-#define VBAT_EnableInterruptForBothEdges() do { PORTF.PIN4CTRL = (PORTF.PIN4CTRL & ~PORT_ISC_gm) | 0x1 ; } while(0)
-#define VBAT_EnableInterruptForRisingEdge() do { PORTF.PIN4CTRL = (PORTF.PIN4CTRL & ~PORT_ISC_gm) | 0x2 ; } while(0)
-#define VBAT_EnableInterruptForFallingEdge() do { PORTF.PIN4CTRL = (PORTF.PIN4CTRL & ~PORT_ISC_gm) | 0x3 ; } while(0)
-#define VBAT_DisableDigitalInputBuffer() do { PORTF.PIN4CTRL = (PORTF.PIN4CTRL & ~PORT_ISC_gm) | 0x4 ; } while(0)
-#define VBAT_EnableInterruptForLowLevelSensing() do { PORTF.PIN4CTRL = (PORTF.PIN4CTRL & ~PORT_ISC_gm) | 0x5 ; } while(0)
-#define PF4_SetInterruptHandler VBAT_SetInterruptHandler
+#define VBAT_SetHigh() do { PORTF_OUTSET = 0x20; } while(0)
+#define VBAT_SetLow() do { PORTF_OUTCLR = 0x20; } while(0)
+#define VBAT_Toggle() do { PORTF_OUTTGL = 0x20; } while(0)
+#define VBAT_GetValue() (VPORTF.IN & (0x1 << 5))
+#define VBAT_SetDigitalInput() do { PORTF_DIRCLR = 0x20; } while(0)
+#define VBAT_SetDigitalOutput() do { PORTF_DIRSET = 0x20; } while(0)
+#define VBAT_SetPullUp() do { PORTF_PIN5CTRL  |= PORT_PULLUPEN_bm; } while(0)
+#define VBAT_ResetPullUp() do { PORTF_PIN5CTRL  &= ~PORT_PULLUPEN_bm; } while(0)
+#define VBAT_SetInverted() do { PORTF_PIN5CTRL  |= PORT_INVEN_bm; } while(0)
+#define VBAT_ResetInverted() do { PORTF_PIN5CTRL  &= ~PORT_INVEN_bm; } while(0)
+#define VBAT_DisableInterruptOnChange() do { PORTF.PIN5CTRL = (PORTF.PIN5CTRL & ~PORT_ISC_gm) | 0x0 ; } while(0)
+#define VBAT_EnableInterruptForBothEdges() do { PORTF.PIN5CTRL = (PORTF.PIN5CTRL & ~PORT_ISC_gm) | 0x1 ; } while(0)
+#define VBAT_EnableInterruptForRisingEdge() do { PORTF.PIN5CTRL = (PORTF.PIN5CTRL & ~PORT_ISC_gm) | 0x2 ; } while(0)
+#define VBAT_EnableInterruptForFallingEdge() do { PORTF.PIN5CTRL = (PORTF.PIN5CTRL & ~PORT_ISC_gm) | 0x3 ; } while(0)
+#define VBAT_DisableDigitalInputBuffer() do { PORTF.PIN5CTRL = (PORTF.PIN5CTRL & ~PORT_ISC_gm) | 0x4 ; } while(0)
+#define VBAT_EnableInterruptForLowLevelSensing() do { PORTF.PIN5CTRL = (PORTF.PIN5CTRL & ~PORT_ISC_gm) | 0x5 ; } while(0)
+#define PF5_SetInterruptHandler VBAT_SetInterruptHandler
 
 //get/set SCL aliases
 #define SCL_SetHigh() do { PORTA_OUTSET = 0x8; } while(0)
@@ -361,24 +361,24 @@
 #define VBUS_DET_EnableInterruptForLowLevelSensing() do { PORTF.PIN2CTRL = (PORTF.PIN2CTRL & ~PORT_ISC_gm) | 0x5 ; } while(0)
 #define PF2_SetInterruptHandler VBUS_DET_SetInterruptHandler
 
-//get/set IO_PF5 aliases
-#define IO_PF5_SetHigh() do { PORTF_OUTSET = 0x20; } while(0)
-#define IO_PF5_SetLow() do { PORTF_OUTCLR = 0x20; } while(0)
-#define IO_PF5_Toggle() do { PORTF_OUTTGL = 0x20; } while(0)
-#define IO_PF5_GetValue() (VPORTF.IN & (0x1 << 5))
-#define IO_PF5_SetDigitalInput() do { PORTF_DIRCLR = 0x20; } while(0)
-#define IO_PF5_SetDigitalOutput() do { PORTF_DIRSET = 0x20; } while(0)
-#define IO_PF5_SetPullUp() do { PORTF_PIN5CTRL  |= PORT_PULLUPEN_bm; } while(0)
-#define IO_PF5_ResetPullUp() do { PORTF_PIN5CTRL  &= ~PORT_PULLUPEN_bm; } while(0)
-#define IO_PF5_SetInverted() do { PORTF_PIN5CTRL  |= PORT_INVEN_bm; } while(0)
-#define IO_PF5_ResetInverted() do { PORTF_PIN5CTRL  &= ~PORT_INVEN_bm; } while(0)
-#define IO_PF5_DisableInterruptOnChange() do { PORTF.PIN5CTRL = (PORTF.PIN5CTRL & ~PORT_ISC_gm) | 0x0 ; } while(0)
-#define IO_PF5_EnableInterruptForBothEdges() do { PORTF.PIN5CTRL = (PORTF.PIN5CTRL & ~PORT_ISC_gm) | 0x1 ; } while(0)
-#define IO_PF5_EnableInterruptForRisingEdge() do { PORTF.PIN5CTRL = (PORTF.PIN5CTRL & ~PORT_ISC_gm) | 0x2 ; } while(0)
-#define IO_PF5_EnableInterruptForFallingEdge() do { PORTF.PIN5CTRL = (PORTF.PIN5CTRL & ~PORT_ISC_gm) | 0x3 ; } while(0)
-#define IO_PF5_DisableDigitalInputBuffer() do { PORTF.PIN5CTRL = (PORTF.PIN5CTRL & ~PORT_ISC_gm) | 0x4 ; } while(0)
-#define IO_PF5_EnableInterruptForLowLevelSensing() do { PORTF.PIN5CTRL = (PORTF.PIN5CTRL & ~PORT_ISC_gm) | 0x5 ; } while(0)
-#define PF5_SetInterruptHandler IO_PF5_SetInterruptHandler
+//get/set IO_PF3 aliases
+#define IO_PF3_SetHigh() do { PORTF_OUTSET = 0x8; } while(0)
+#define IO_PF3_SetLow() do { PORTF_OUTCLR = 0x8; } while(0)
+#define IO_PF3_Toggle() do { PORTF_OUTTGL = 0x8; } while(0)
+#define IO_PF3_GetValue() (VPORTF.IN & (0x1 << 3))
+#define IO_PF3_SetDigitalInput() do { PORTF_DIRCLR = 0x8; } while(0)
+#define IO_PF3_SetDigitalOutput() do { PORTF_DIRSET = 0x8; } while(0)
+#define IO_PF3_SetPullUp() do { PORTF_PIN3CTRL  |= PORT_PULLUPEN_bm; } while(0)
+#define IO_PF3_ResetPullUp() do { PORTF_PIN3CTRL  &= ~PORT_PULLUPEN_bm; } while(0)
+#define IO_PF3_SetInverted() do { PORTF_PIN3CTRL  |= PORT_INVEN_bm; } while(0)
+#define IO_PF3_ResetInverted() do { PORTF_PIN3CTRL  &= ~PORT_INVEN_bm; } while(0)
+#define IO_PF3_DisableInterruptOnChange() do { PORTF.PIN3CTRL = (PORTF.PIN3CTRL & ~PORT_ISC_gm) | 0x0 ; } while(0)
+#define IO_PF3_EnableInterruptForBothEdges() do { PORTF.PIN3CTRL = (PORTF.PIN3CTRL & ~PORT_ISC_gm) | 0x1 ; } while(0)
+#define IO_PF3_EnableInterruptForRisingEdge() do { PORTF.PIN3CTRL = (PORTF.PIN3CTRL & ~PORT_ISC_gm) | 0x2 ; } while(0)
+#define IO_PF3_EnableInterruptForFallingEdge() do { PORTF.PIN3CTRL = (PORTF.PIN3CTRL & ~PORT_ISC_gm) | 0x3 ; } while(0)
+#define IO_PF3_DisableDigitalInputBuffer() do { PORTF.PIN3CTRL = (PORTF.PIN3CTRL & ~PORT_ISC_gm) | 0x4 ; } while(0)
+#define IO_PF3_EnableInterruptForLowLevelSensing() do { PORTF.PIN3CTRL = (PORTF.PIN3CTRL & ~PORT_ISC_gm) | 0x5 ; } while(0)
+#define PF3_SetInterruptHandler IO_PF3_SetInterruptHandler
 
 //get/set FLASH_CS aliases
 #define FLASH_CS_SetHigh() do { PORTA_OUTSET = 0x1; } while(0)
@@ -419,23 +419,23 @@
 #define PC3_SetInterruptHandler LED_SetInterruptHandler
 
 //get/set TOF_XSHUT aliases
-#define TOF_XSHUT_SetHigh() do { PORTF_OUTSET = 0x8; } while(0)
-#define TOF_XSHUT_SetLow() do { PORTF_OUTCLR = 0x8; } while(0)
-#define TOF_XSHUT_Toggle() do { PORTF_OUTTGL = 0x8; } while(0)
-#define TOF_XSHUT_GetValue() (VPORTF.IN & (0x1 << 3))
-#define TOF_XSHUT_SetDigitalInput() do { PORTF_DIRCLR = 0x8; } while(0)
-#define TOF_XSHUT_SetDigitalOutput() do { PORTF_DIRSET = 0x8; } while(0)
-#define TOF_XSHUT_SetPullUp() do { PORTF_PIN3CTRL  |= PORT_PULLUPEN_bm; } while(0)
-#define TOF_XSHUT_ResetPullUp() do { PORTF_PIN3CTRL  &= ~PORT_PULLUPEN_bm; } while(0)
-#define TOF_XSHUT_SetInverted() do { PORTF_PIN3CTRL  |= PORT_INVEN_bm; } while(0)
-#define TOF_XSHUT_ResetInverted() do { PORTF_PIN3CTRL  &= ~PORT_INVEN_bm; } while(0)
-#define TOF_XSHUT_DisableInterruptOnChange() do { PORTF.PIN3CTRL = (PORTF.PIN3CTRL & ~PORT_ISC_gm) | 0x0 ; } while(0)
-#define TOF_XSHUT_EnableInterruptForBothEdges() do { PORTF.PIN3CTRL = (PORTF.PIN3CTRL & ~PORT_ISC_gm) | 0x1 ; } while(0)
-#define TOF_XSHUT_EnableInterruptForRisingEdge() do { PORTF.PIN3CTRL = (PORTF.PIN3CTRL & ~PORT_ISC_gm) | 0x2 ; } while(0)
-#define TOF_XSHUT_EnableInterruptForFallingEdge() do { PORTF.PIN3CTRL = (PORTF.PIN3CTRL & ~PORT_ISC_gm) | 0x3 ; } while(0)
-#define TOF_XSHUT_DisableDigitalInputBuffer() do { PORTF.PIN3CTRL = (PORTF.PIN3CTRL & ~PORT_ISC_gm) | 0x4 ; } while(0)
-#define TOF_XSHUT_EnableInterruptForLowLevelSensing() do { PORTF.PIN3CTRL = (PORTF.PIN3CTRL & ~PORT_ISC_gm) | 0x5 ; } while(0)
-#define PF3_SetInterruptHandler TOF_XSHUT_SetInterruptHandler
+#define TOF_XSHUT_SetHigh() do { PORTF_OUTSET = 0x10; } while(0)
+#define TOF_XSHUT_SetLow() do { PORTF_OUTCLR = 0x10; } while(0)
+#define TOF_XSHUT_Toggle() do { PORTF_OUTTGL = 0x10; } while(0)
+#define TOF_XSHUT_GetValue() (VPORTF.IN & (0x1 << 4))
+#define TOF_XSHUT_SetDigitalInput() do { PORTF_DIRCLR = 0x10; } while(0)
+#define TOF_XSHUT_SetDigitalOutput() do { PORTF_DIRSET = 0x10; } while(0)
+#define TOF_XSHUT_SetPullUp() do { PORTF_PIN4CTRL  |= PORT_PULLUPEN_bm; } while(0)
+#define TOF_XSHUT_ResetPullUp() do { PORTF_PIN4CTRL  &= ~PORT_PULLUPEN_bm; } while(0)
+#define TOF_XSHUT_SetInverted() do { PORTF_PIN4CTRL  |= PORT_INVEN_bm; } while(0)
+#define TOF_XSHUT_ResetInverted() do { PORTF_PIN4CTRL  &= ~PORT_INVEN_bm; } while(0)
+#define TOF_XSHUT_DisableInterruptOnChange() do { PORTF.PIN4CTRL = (PORTF.PIN4CTRL & ~PORT_ISC_gm) | 0x0 ; } while(0)
+#define TOF_XSHUT_EnableInterruptForBothEdges() do { PORTF.PIN4CTRL = (PORTF.PIN4CTRL & ~PORT_ISC_gm) | 0x1 ; } while(0)
+#define TOF_XSHUT_EnableInterruptForRisingEdge() do { PORTF.PIN4CTRL = (PORTF.PIN4CTRL & ~PORT_ISC_gm) | 0x2 ; } while(0)
+#define TOF_XSHUT_EnableInterruptForFallingEdge() do { PORTF.PIN4CTRL = (PORTF.PIN4CTRL & ~PORT_ISC_gm) | 0x3 ; } while(0)
+#define TOF_XSHUT_DisableDigitalInputBuffer() do { PORTF.PIN4CTRL = (PORTF.PIN4CTRL & ~PORT_ISC_gm) | 0x4 ; } while(0)
+#define TOF_XSHUT_EnableInterruptForLowLevelSensing() do { PORTF.PIN4CTRL = (PORTF.PIN4CTRL & ~PORT_ISC_gm) | 0x5 ; } while(0)
+#define PF4_SetInterruptHandler TOF_XSHUT_SetInterruptHandler
 
 /**
  * @ingroup  pinsdriver
@@ -804,24 +804,24 @@ void VBUS_DET_SetInterruptHandler(void (* interruptHandler)(void)) ;
 
 /**
  * @ingroup  pinsdriver
- * @brief Default Interrupt Handler for IO_PF5 pin. 
- *        This is a predefined interrupt handler to be used together with the IO_PF5_SetInterruptHandler() method.
- *        This handler is called every time the IO_PF5 ISR is executed. 
+ * @brief Default Interrupt Handler for IO_PF3 pin. 
+ *        This is a predefined interrupt handler to be used together with the IO_PF3_SetInterruptHandler() method.
+ *        This handler is called every time the IO_PF3 ISR is executed. 
  * @pre PIN_MANAGER_Initialize() has been called at least once
  * @param none
  * @return none
  */
-void IO_PF5_DefaultInterruptHandler(void);
+void IO_PF3_DefaultInterruptHandler(void);
 
 /**
  * @ingroup  pinsdriver
- * @brief Interrupt Handler Setter for IO_PF5 pin input-sense-config functionality.
- *        Allows selecting an interrupt handler for IO_PF5 at application runtime
+ * @brief Interrupt Handler Setter for IO_PF3 pin input-sense-config functionality.
+ *        Allows selecting an interrupt handler for IO_PF3 at application runtime
  * @pre PIN_MANAGER_Initialize() has been called at least once
  * @param InterruptHandler function pointer.
  * @return none
  */
-void IO_PF5_SetInterruptHandler(void (* interruptHandler)(void)) ; 
+void IO_PF3_SetInterruptHandler(void (* interruptHandler)(void)) ; 
 
 /**
  * @ingroup  pinsdriver

@@ -3,14 +3,54 @@
 
 #include "mcc_generated_files/usb/usb_device.h"                        // USBDevice_Handle
 #include "mcc_generated_files/usb/usb_cdc/usb_cdc_virtual_serial_port.h" // USB_CDCxxx
+#include "mcc_generated_files/usb/usb_cdc/usb_cdc.h"                   // USB_CDCRequestHandler
+#include "mcc_generated_files/usb/usb_common/usb_core_events.h"       // USB_ClassRequestCallbackRegister
+#include "mcc_generated_files/usb/usb_common/usb_core_transfer.h"     // USB_TransferControlDataSet
 #include "mcc_generated_files/timer/delay.h"                          // DELAY_milliseconds
 #include <avr/io.h>                                                   // USB0 / USB_ENABLE_bm / USB_ATTACH_bm
+
+// 内部高周波発振器(OSCHF)の自動補正の切り替え (CLKCTRL.OSCHFCTRLA.AUTOTUNE, 保護レジスタ)
+static void setOscAutoTune(uint8_t autotune_gc)
+{
+    uint8_t v = (uint8_t)((CLKCTRL.OSCHFCTRLA & ~CLKCTRL_AUTOTUNE_gm) | autotune_gc);
+    _PROTECTED_WRITE(CLKCTRL.OSCHFCTRLA, v);
+}
+
+// 【エラッタ対策】SET_LINE_CODING/GET_LINE_CODING を偶数アドレスのバッファで処理する。
+// MCC の usb_cdc.c は通信設定(usbCDCLineCoding, 7バイト)のアライメントを指定していないため、
+// リンク結果によって奇数アドレスに置かれることがある。マルチパケット有効のOUT転送は偶数アドレス
+// 必須 (AVR64DU エラッタ 2.8.1) で、スタックは奇数アドレスを ENDPOINT_ALIGN_ERROR で拒否する。
+// その結果 SET_LINE_CODING のデータ段階が完了せず、PC側でポートを開く処理がタイムアウトする。
+// (c-logger は偶然偶数アドレスだったため動いていた。生成コードを直すとMCC再生成で消えるのでここで対処)
+static USB_CDC_LINE_CODING_t s_lineCoding __attribute__((aligned(2))) = {
+    .dwDTERate   = 115200,
+    .bCharFormat = USB_CDC_LINE_CODING_ONE_STOP_BIT,
+    .bParityType = USB_CDC_LINE_CODING_PARITY_NONE,
+    .bDataBits   = USB_CDC_LINE_CODING_8_DATA_BITS,
+};
+
+static RETURN_CODE_t lineCodingRequestHandler(USB_SETUP_REQUEST_t *req)
+{
+    if (USB_REQUEST_RECIPIENT_INTERFACE == (USB_REQUEST_RECIPIENT_t)req->bmRequestType.recipient &&
+        USB_REQUEST_TYPE_CLASS == (USB_REQUEST_TYPE_t)req->bmRequestType.type &&
+        (USB_CDC_REQUEST_SET_LINE_CODING == req->bRequest || USB_CDC_REQUEST_GET_LINE_CODING == req->bRequest))
+    {
+        return USB_TransferControlDataSet((uint8_t *)&s_lineCoding, sizeof(s_lineCoding), NULL);
+    }
+    return USB_CDCRequestHandler(req); // その他(SET_CONTROL_LINE_STATE等)は従来どおり
+}
 
 void USB_Comm_Initialize(void)
 {
     // USB デバイス層 (USBDevice_Initialize) は SYSTEM_Initialize() 済み。
     // ここでは CDC 仮想シリアルポート層のみ初期化する。
     USB_CDCVirtualSerialPortInitialize();
+    USB_ClassRequestCallbackRegister(lineCodingRequestHandler); // CDCの要求処理を上書き登録
+
+    // USB使用時は OSCHF を USB の SOF(1ms周期) に自動補正する (データシート 12.3.5 で必須)。
+    // MCC のクロック設定は AUTOTUNE=OFF のため、補正なしでは発振器の個体差がそのまま残り、
+    // USB(許容±0.25%)の通信が成立しない場合がある(列挙はできてもポートが開けない等)。
+    setOscAutoTune(CLKCTRL_AUTOTUNE_SOF_gc);
 }
 
 void USB_Comm_Task(void)
@@ -115,6 +155,7 @@ void USB_Comm_Disable(void)
     // 停止できるようにし、ベース電流を大幅に下げる。
     // 【前提】最後の応答は呼び出し側が USB_Comm_Flush() 済みであること(これ以降USB送信不可)。
     // 【復帰】USB通信に戻すにはリセット(SYSTEM_Initialize が USB を再有効化)。
+    setOscAutoTune(CLKCTRL_AUTOTUNE_OFF_gc); // SOFが来なくなるので自動補正を止める(直近の補正値は保持される)
     USB0.CTRLB &= ~USB_ATTACH_bm;   // バスから detach (ホストには切断として見える)
     USB0.CTRLA &= ~USB_ENABLE_bm;   // USBモジュール無効化 → OSCHFクロック要求を解除
 }

@@ -3,7 +3,7 @@
  * Author: e.togashi
  *
  * VL53L1X (ToF距離センサ) の制御。ST ULD API (VL53L1X/) のラッパ。
- *   - 電源: XSHUT(PF3) で ON/OFF。OFF中(HW standby)は数uA。
+ *   - 電源: XSHUT(PF4) で ON/OFF。OFF中(HW standby)は数uA。
  *   - 割り込み: GPIO1(PA1) を「アクティブLow」に設定する。待機中は High(=プルアップ電流ゼロ)、
  *     測定完了で Low。v2 の既定(アクティブHigh)だと待機中にプルアップへ約330uA流れるため。
  *   - 測距条件 (モード/タイミングバジェット/ROI/オフセット) は EM_settings から適用する。

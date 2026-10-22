@@ -44,6 +44,14 @@
 #define LOW_BATTERY_COUNT_LIMIT 3     // 下限割れがこの回数連続したら記録停止 (= 30秒)
 #define RESET_HOLD_SEC          5     // ボタン長押しでリセットするまでの秒数
 
+// 診断用ビルド (USB不具合の切り分け用)。0=通常ファームウェア。
+//   1: USBのみ (c-loggerと同じ起動手順)。LEDは1秒ごとに点灯/消灯を切り替え
+//   2: 1 + EEPROM読込・フラッシュ件数復元・センサOFF・ADC停止。LEDは1秒ごとに切替
+//   3: 2 + ボタン/VBUS割り込み登録 + 2回点滅ハートビート (通常FWのUSBモードとほぼ同じ)
+#ifndef DIAG_LEVEL
+#define DIAG_LEVEL 0
+#endif
+
 typedef enum { MODE_USB, MODE_LOGGING, MODE_STANDBY } run_mode_t;
 
 static volatile bool s_tick = false;          // PIT(1秒)で立つ
@@ -181,6 +189,176 @@ static void executeSecondlyTask(void)
 
 // <editor-fold defaultstate="collapsed" desc="main">
 
+#if DIAG_LEVEL == 4
+// 診断4: USBの制御要求がどこまで届いたかをLEDの点滅回数で表示する (USBのみ, delayなし)
+//   点滅回数 = 到達段階 + 1 を約2秒おきに繰り返す
+//   1回: 何も受信していない
+//   2回: SET_CONFIGURATION 受信 (列挙完了)
+//   3回: CDCクラス要求を受信 (GET_LINE_CODING 等)
+//   4回: SET_LINE_CODING のSETUPを受信
+//   5回: SET_LINE_CODING のデータ(7バイト)を受信完了 (PC→機器のデータ転送が成功)
+//   6回: SET_CONTROL_LINE_STATE を受信
+#include "mcc_generated_files/usb/usb_common/usb_core_events.h"
+#include "mcc_generated_files/usb/usb_cdc/usb_cdc.h"
+#include "mcc_generated_files/usb/usb_common/usb_core_transfer.h"
+
+static volatile uint8_t s_stage = 0;
+static uint8_t s_lc_buf[7];
+
+static void diagStage(uint8_t st) { if (st > s_stage) s_stage = st; }
+
+static void diagSetConfig(USB_SETUP_REQUEST_t *req) { (void)req; diagStage(1); }
+
+static void diagLineCodingDone(void) { diagStage(4); }
+
+static RETURN_CODE_t diagClassRequest(USB_SETUP_REQUEST_t *req)
+{
+    diagStage(2);
+    if (req->bmRequestType.type == USB_REQUEST_TYPE_CLASS &&
+        req->bmRequestType.dataPhaseTransferDirection == USB_REQUEST_DIR_OUT)
+    {
+        if (req->bRequest == USB_CDC_REQUEST_SET_LINE_CODING)
+        {
+            diagStage(3);
+            return USB_TransferControlDataSet(s_lc_buf, sizeof(s_lc_buf), diagLineCodingDone);
+        }
+        if (req->bRequest == USB_CDC_REQUEST_SET_CONTROL_LINE_STATE) diagStage(5);
+    }
+    return USB_CDCRequestHandler(req);
+}
+
+int main(void)
+{
+    SYSTEM_Initialize();
+    RTC_SetPITIsrCallback(oneSecHandler);
+    // PITを8Hzにする (点滅表示用)
+    while (RTC.PITSTATUS > 0) ;
+    RTC.PITCTRLA = RTC_PERIOD_CYC4096_gc | RTC_PITEN_bm;
+    DELAY_milliseconds(100);
+    sei();
+    DELAY_milliseconds(100);
+    USB_Comm_Initialize();
+    USB_SetConfigurationCallbackRegister(diagSetConfig);
+    USB_ClassRequestCallbackRegister(diagClassRequest);
+
+    uint8_t phase = 0; // 1周期 = (段階+1)回 × 4tick + 休み16tick
+    while (true)
+    {
+        if (s_tick)
+        {
+            s_tick = false;
+            uint8_t blinks = (uint8_t)(s_stage + 1);
+            uint8_t len = (uint8_t)(blinks * 4 + 16);
+            if (phase < blinks * 4 && (phase % 4) == 0) turnOnGreenLED();
+            else                                       turnOffGreenLED();
+            if (++phase >= len) phase = 0;
+        }
+        USB_Comm_Task();
+    }
+}
+#elif DIAG_LEVEL == 5
+// 診断5: CDCの制御要求ごとに「受信回数」と「完了回数(ステータス段階まで終了)」を数え、
+//        LEDの点滅で4つの数を順に表示する (各最大9回, 0回は長めの1回点灯で表す)
+//   [A:SET_LINE_CODING受信] 休 [B:同 完了] 休 [C:GET_LINE_CODING受信] 休 [D:同 完了] 長休
+#include "mcc_generated_files/usb/usb_common/usb_core_events.h"
+#include "mcc_generated_files/usb/usb_cdc/usb_cdc.h"
+#include "mcc_generated_files/usb/usb_common/usb_core_transfer.h"
+
+static volatile uint8_t s_cnt[4] = {0}; // A,B,C,D
+static uint8_t s_lc_buf[7] = {0x00, 0xC2, 0x01, 0x00, 0, 0, 8}; // 115200bps 8N1
+
+static void diagInc(uint8_t i) { if (s_cnt[i] < 9) s_cnt[i]++; }
+static void diagSetLcDone(void) { diagInc(1); }
+static void diagGetLcDone(void) { diagInc(3); }
+
+static RETURN_CODE_t diagClassRequest(USB_SETUP_REQUEST_t *req)
+{
+    if (req->bmRequestType.type == USB_REQUEST_TYPE_CLASS)
+    {
+        if (req->bRequest == USB_CDC_REQUEST_SET_LINE_CODING &&
+            req->bmRequestType.dataPhaseTransferDirection == USB_REQUEST_DIR_OUT)
+        {
+            diagInc(0);
+            return USB_TransferControlDataSet(s_lc_buf, sizeof(s_lc_buf), diagSetLcDone);
+        }
+        if (req->bRequest == USB_CDC_REQUEST_GET_LINE_CODING &&
+            req->bmRequestType.dataPhaseTransferDirection == USB_REQUEST_DIR_IN)
+        {
+            diagInc(2);
+            return USB_TransferControlDataSet(s_lc_buf, sizeof(s_lc_buf), diagGetLcDone);
+        }
+    }
+    return USB_CDCRequestHandler(req);
+}
+
+int main(void)
+{
+    SYSTEM_Initialize();
+    RTC_SetPITIsrCallback(oneSecHandler);
+    // PITを8Hzにする (点滅表示用)
+    while (RTC.PITSTATUS > 0) ;
+    RTC.PITCTRLA = RTC_PERIOD_CYC4096_gc | RTC_PITEN_bm;
+    DELAY_milliseconds(100);
+    sei();
+    DELAY_milliseconds(100);
+    USB_Comm_Initialize();
+    USB_ClassRequestCallbackRegister(diagClassRequest);
+
+    // 表示: 数n → n回の短い点滅(1tick点灯+3tick消灯)。n=0 → 4tick点灯。各数の後に8tick休み、最後に24tick休み
+    uint8_t idx = 0, phase = 0;
+    while (true)
+    {
+        if (s_tick)
+        {
+            s_tick = false;
+            uint8_t n = s_cnt[idx];
+            uint8_t body = (n == 0) ? 4 : (uint8_t)(n * 4);
+            uint8_t gap = (idx == 3) ? 24 : 8;
+            bool on = (phase < body) && ((n == 0) || (phase % 4) == 0);
+            if (on) turnOnGreenLED(); else turnOffGreenLED();
+            if (++phase >= body + gap) { phase = 0; idx = (uint8_t)((idx + 1) & 3); }
+        }
+        USB_Comm_Task();
+    }
+}
+#elif DIAG_LEVEL > 0
+int main(void)
+{
+    SYSTEM_Initialize();
+#if DIAG_LEVEL >= 2
+    ADC0_Disable();
+    SPI0_Open(SPI0_DEFAULT);
+    EM_loadEEPROM();
+    Measurement_Initialize();
+    Tof_PowerOff();
+#endif
+    RTC_SetPITIsrCallback(oneSecHandler);
+#if DIAG_LEVEL >= 3
+    SW_SetInterruptHandler(buttonHandler);
+    VBUS_DET_SetInterruptHandler(vbusHandler);
+#endif
+    DELAY_milliseconds(100);
+    sei();
+    DELAY_milliseconds(100);
+    USB_Comm_Initialize();
+    s_mode = MODE_USB;
+
+    while (true)
+    {
+        if (s_tick)
+        {
+            s_tick = false;
+            g_epoch++;
+#if DIAG_LEVEL >= 3
+            blinkGreenLEDHeartbeat();
+#else
+            turnToggleGreenLED();
+#endif
+        }
+        USB_Comm_Task();
+    }
+}
+#else
 int main(void)
 {
     SYSTEM_Initialize();   // クロック / ピン / ADC / I2C / SPI / USB / RTC 等
@@ -240,6 +418,7 @@ int main(void)
         }
     }
 }
+#endif // DIAG_LEVEL
 
 // </editor-fold>
 
@@ -248,13 +427,13 @@ int main(void)
 void     Clock_Set(uint32_t epoch) { g_epoch = epoch; }
 uint32_t Clock_Get(void)           { return g_epoch; }
 
-// 電池電圧 [mV]。PF4(AIN20)に電池+が直結。基準電圧 内部2.048V、10bit×64回積算 (MCC設定)。
+// 電池電圧 [mV]。PF5(AIN21, MCCのピン名 VBAT)に電池+が直結。基準電圧 内部2.048V、10bit×64回積算 (MCC設定)。
 // mV = acc * 2048 / (1024*64) = acc / 32
 uint16_t getBatteryVoltage_mV(void)
 {
     ADC0_Enable();
     DELAY_microseconds(100); // 基準電圧の立ち上がり待ち
-    ADC0_ChannelSelect(ADC0_CHANNEL_AIN20);
+    ADC0_ChannelSelect(VBAT);
     ADC0_ConversionStart();
     while (!ADC0_IsConversionDone()) ;
     adc_accumulate_t acc = ADC0_AccumulatedResultGet();

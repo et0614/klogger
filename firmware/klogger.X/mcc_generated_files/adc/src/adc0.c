@@ -70,7 +70,7 @@ void ADC0_Initialize(void)
     ADC0.COMMAND = (ADC_MODE_BURST_gc)                /* MODE (BURST) */
 				|(ADC_START_STOP_gc);               /* START (Stop/No ongoing conv) */
     ADC0.DBGCTRL = (0 << ADC_DBGRUN_bp);              /* DBGRUN (disabled) */
-    ADC0.MUXPOS = (ADC_MUXPOS_AIN20_gc);             /* MUXPOS (AIN20) */
+    ADC0.MUXPOS = (ADC_MUXPOS_AIN21_gc);             /* MUXPOS (AIN21) */
     ADC0.WINLT = 0x0;                               /* WINLT (0x0) */
     ADC0.WINHT = 0x0;                               /* WINHT (0x0) */
     

@@ -459,3 +459,6 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# 診断用ビルド (コミットしない)
+firmware/diag/
