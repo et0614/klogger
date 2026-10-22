@@ -31,6 +31,10 @@ void Measurement_Initialize(void);
 /// @return true:センサ起動成功
 bool Measurement_Start(void);
 
+/// センサの測定完了(GPIO1 立ち下がり割り込み)で呼ぶ (記録中のみ)。結果を取り込み割り込みを解除する。
+/// GPIO1 はプルアップ(10k)付きのアクティブLowなので、すぐ解除しないと次の Tick まで ~0.33mA 流れ続ける。
+void Measurement_OnTofReady(void);
+
 /// 1秒ごとに呼ぶ (記録中のみ)。記録タイミングで1レコード追加する。
 /// @param epoch 現在時刻 (1レコード目の時刻 start_dt の確定に使う)
 void Measurement_Tick(uint32_t epoch);

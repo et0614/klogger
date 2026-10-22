@@ -56,6 +56,7 @@ typedef enum { MODE_USB, MODE_LOGGING, MODE_STANDBY } run_mode_t;
 
 static volatile bool s_tick = false;          // PIT(1秒)で立つ
 static volatile bool s_vbus_changed = false;  // VBUS検出ピンの変化で立つ
+static volatile bool s_tof_ready = false;     // センサ測定完了(GPIO1立ち下がり)で立つ
 static run_mode_t s_mode = MODE_STANDBY;
 static uint8_t s_reset_timer = 0;
 static uint8_t s_lowbat_count = 0;
@@ -84,6 +85,12 @@ static void buttonHandler(void)
 static void vbusHandler(void)
 {
     s_vbus_changed = true;
+}
+
+// センサGPIO1(PA1, 立ち下がり, MCC設定): 測定完了。STANDBY中でも起床できる(DUは全ピン非同期検出)
+static void tofReadyHandler(void)
+{
+    s_tof_ready = true;
 }
 
 // </editor-fold>
@@ -372,6 +379,7 @@ int main(void)
     RTC_SetPITIsrCallback(oneSecHandler);
     SW_SetInterruptHandler(buttonHandler);
     VBUS_DET_SetInterruptHandler(vbusHandler);
+    TOF_GPIO_SetInterruptHandler(tofReadyHandler);
 
     // STANDBY中もPITで毎秒起床できるよう RUNSTDBY を有効化 (MCC生成コードは無効で初期化する)
     while (RTC.STATUS > 0) ;
@@ -399,6 +407,12 @@ int main(void)
             // USB挿入: 記録中/待機中 → USB通信モードへ。USB抜去: USB通信モード → 待機へ。
             // (記録中の抜去は無視して記録を続ける)
             if ((usb && s_mode != MODE_USB) || (!usb && s_mode == MODE_USB)) safeReset();
+        }
+
+        if (s_tof_ready)
+        {
+            s_tof_ready = false;
+            if (s_mode == MODE_LOGGING) Measurement_OnTofReady(); // すぐ読んでGPIO1(プルアップ電流)を解除
         }
 
         if (s_tick)

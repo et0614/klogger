@@ -85,11 +85,17 @@ void Measurement_Stop(void)
     W25_WakeUp(); // USB通信などで続けてアクセスできるよう起こしておく
 }
 
-void Measurement_Tick(uint32_t epoch)
+void Measurement_OnTofReady(void)
 {
     // 新しい結果が出ていれば取り込む (GPIO1=Low のときだけ I2C で読む)
     TofResult_t r;
     if (Tof_ReadIfReady(&r)) s_last = W25_EncodeDistance(r.distance_mm, r.status);
+}
+
+void Measurement_Tick(uint32_t epoch)
+{
+    // 割り込みを取りこぼした場合の保険 (通常は Measurement_OnTofReady で取り込み済み)
+    Measurement_OnTofReady();
 
     uint16_t interval = EM_settings.interval_sec ? EM_settings.interval_sec : 1;
     if (++s_sec < interval) return;
