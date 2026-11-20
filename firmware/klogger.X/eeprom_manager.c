@@ -42,7 +42,9 @@ static uint8_t calcCrc(void)
                      sizeof(KLoggerSettings) - sizeof(EM_settings.crc));
 }
 
-// デフォルト値 (v2 と同じ測距条件: Short / 15ms / ROI 4x4, 1秒間隔)
+// デフォルト値 (測距条件: Short / 20ms / ROI 4x4, 1秒間隔)。
+// 20ms は VL53L1X の最小タイミングバジェット (Short のみ)。15ms は datasheet の範囲外。
+// 50ms から 20ms で記録中の平均電流は約1.2mA → 約0.6mA (実測)
 static void initSettings(void)
 {
     EM_settings = (KLoggerSettings){
@@ -51,7 +53,7 @@ static void initSettings(void)
         1609459200,     // start_dt (2021/1/1 00:00:00 UTC, 未計測)
         TOF_MODE_SHORT, // tof_mode
         4,              // tof_roi
-        15,             // tof_tb_ms
+        20,             // tof_tb_ms
         0,              // tof_offset_mm
         0               // crc
     };
