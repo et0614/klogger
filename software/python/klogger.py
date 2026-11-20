@@ -18,6 +18,7 @@ USB接続した K-Logger v3 の設定・記録開始・データ読み出しを�
     (GUI版: python klogger_gui.py)
     python klogger.py selftest                フラッシュ/距離センサの自己診断
     python klogger.py clear                   保存データの消去
+    python klogger.py update firmware.hex     USB でファームウェアを更新 (ブートローダで起動しておく。avrdude が必要)
     共通オプション: -p COM3 (ポート指定。省略時は自動検出)
 
 記録中の機器はUSBに応答しない。読み出すときはUSBを挿すと自動でUSB通信モードに戻る
@@ -190,6 +191,75 @@ def write_daily_csv(folder, start_dt, interval, recs):
     return len(files)
 
 
+# ============================================================
+# ファームウェア更新 (USB ブートローダ euboot + avrdude)
+# ============================================================
+
+BOOTLOADER_VIDPID = "04d8:0b12"   # euboot (firmware/bootloader) の USB VID:PID
+APP_START = 0x0A00                # ブートローダの後ろ (BOOTSIZE=0x05 × 512B)
+FLASH_END = 0x10000               # AVR64DU32 のフラッシュ 64KB
+
+
+def find_avrdude(extra_dirs=()):
+    """avrdude の実行ファイルを探す: 指定フォルダ → このツール(exe)と同じフォルダ → PATH。無ければ None"""
+    import shutil
+    names = ["avrdude.exe", "avrdude"]
+    dirs = list(extra_dirs)
+    dirs.append(os.path.dirname(os.path.abspath(sys.argv[0])))
+    dirs.append(os.path.dirname(os.path.abspath(__file__)))
+    if getattr(sys, "_MEIPASS", None):     # PyInstaller で同梱した場合
+        dirs.append(sys._MEIPASS)
+    for d in dirs:
+        for n in names:
+            p = os.path.join(d, n)
+            if os.path.isfile(p):
+                return p
+    return shutil.which("avrdude")
+
+
+def check_app_hex(path):
+    """書き込む hex を確認する。ブートローダ領域 (0x0000-0x09FF) に触れる hex は書き込まない
+    (ブートローダの後ろに置くリンカ設定が無いビルド)。@return (先頭アドレス, 末尾アドレス, バイト数)"""
+    upper, addrs = 0, []
+    for raw in open(path, encoding="ascii", errors="replace"):
+        line = raw.strip()
+        if not line.startswith(":"):
+            continue
+        n, a, t = int(line[1:3], 16), int(line[3:7], 16), int(line[7:9], 16)
+        if t == 0:
+            base = (upper << 16) | a
+            if base < FLASH_END:             # フラッシュ (ヒューズ等の 0x8xxxxx は含めない)
+                addrs += [base, base + n - 1]
+        elif t == 4:
+            upper = int(line[9:13], 16)
+        elif t == 1:
+            break
+    if not addrs:
+        raise RuntimeError("the file has no program data")
+    lo, hi = min(addrs), max(addrs)
+    if lo < APP_START:
+        raise RuntimeError(f"the file starts at 0x{lo:04X}, inside the bootloader area (0x0000-0x09FF). "
+                           "Build the firmware with -Wl,--defsym=__TEXT_REGION_ORIGIN__=0xA00")
+    return lo, hi, hi - lo + 1
+
+
+def update_firmware(hex_path, avrdude, output=print):
+    """ブートローダ動作中の K-Logger に hex を書き込む。-D (自動消去しない) でブートローダを残す。
+    @param output avrdude の出力を1行ずつ渡す
+    @return avrdude の終了コード (0 = 成功)"""
+    import subprocess
+    check_app_hex(hex_path)
+    cmd = [avrdude, f"-Pusb:{BOOTLOADER_VIDPID}", "-cjtag3updi", "-pavr64du32", "-D",
+           f"-Uflash:w:{hex_path}:i"]
+    output(" ".join(cmd))
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                         errors="replace", creationflags=flags)
+    for line in p.stdout:
+        output(line.rstrip())
+    return p.wait()
+
+
 def find_port():
     """K-Logger の COMポートを自動検出する (VID/PIDで候補を探し hello で確認)。"""
     for p in list_ports.comports():
@@ -326,6 +396,20 @@ def cmd_clear(dev, args):
     print("消去しました。")
 
 
+def cmd_update(args):
+    avr = args.avrdude or find_avrdude()
+    if not avr:
+        print("avrdude が見つかりません。avrdude.exe をこのツールと同じフォルダに置くか、--avrdude で指定してください。")
+        return 1
+    lo, hi, n = check_app_hex(args.hex)
+    print(f"{args.hex}: 0x{lo:04X}〜0x{hi:04X} ({n:,} バイト)")
+    print("K-Logger をブートローダで起動しておくこと: 電池と USB を外し、ボタンを押したまま USB をつなぐ。")
+    rc = update_firmware(args.hex, avr)
+    print("書き込みました。USB を抜き差しすると新しいファームウェアで起動します。" if rc == 0
+          else f"失敗しました (avrdude 終了コード {rc})。")
+    return rc
+
+
 def main():
     ap = argparse.ArgumentParser(description="K-Logger v3 PCツール")
     ap.add_argument("-p", "--port", help="COMポート (省略時は自動検出)")
@@ -350,7 +434,17 @@ def main():
     p.add_argument("--offset", type=int, help="距離オフセット [mm] (-500〜500, FW 3.1.0以降)")
     sub.add_parser("selftest", help="自己診断")
     sub.add_parser("clear", help="保存データの消去")
+    p = sub.add_parser("update", help="USB でファームウェアを更新 (ブートローダで起動しておく)")
+    p.add_argument("hex", help="ファームウェアの hex (klogger.X.production.hex)")
+    p.add_argument("--avrdude", help="avrdude の実行ファイル (省略時は自動で探す)")
     args = ap.parse_args()
+
+    if args.cmd == "update":   # ブートローダが相手なので K-Logger のポートは探さない
+        try:
+            return cmd_update(args)
+        except (OSError, RuntimeError) as e:
+            print(f"エラー: {e}")
+            return 1
 
     port = args.port or find_port()
     if port is None:

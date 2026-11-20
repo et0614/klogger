@@ -40,7 +40,7 @@
 FUSES =
 {
   .BODCFG = ACTIVE_DISABLE_gc | LVL_BODLEVEL0_gc | SAMPFREQ_128Hz_gc | SLEEP_DISABLE_gc,
-  .BOOTSIZE = 0x0, // テスト用にブートローダ無効化 (元: 0x5 = euboot領域 0x000-0x9FF 予約)。アプリを0x0000先頭で動かす
+  .BOOTSIZE = 0x5,
   .CODESIZE = 0x0,
   .OSCCFG = CLKSEL_OSCHF_gc,
   .PDICFG = KEY_NOTACT_gc | LEVEL_BASIC_gc,

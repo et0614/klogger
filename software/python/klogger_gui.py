@@ -148,6 +148,7 @@ class App(tk.Tk):
         self._build_live_tab()
         self._build_cal_tab()
         self._build_settings_tab()
+        self._build_firmware_tab()
 
         # ステータスバー
         bar = ttk.Frame(self)
@@ -292,6 +293,76 @@ class App(tk.Tk):
             row=7, column=0, columnspan=2, sticky="w", pady=6)
         self.device_buttons += [self.apply_btn, self.selftest_btn]
 
+    def _build_firmware_tab(self):
+        f = ttk.Frame(self.nb, padding=10)
+        self.nb.add(f, text="Firmware")
+        ttk.Label(f, wraplength=560, justify="left", text=(
+            "Update the firmware over USB (no connection with the Connect button is needed).\n"
+            "1. Remove the battery and unplug the USB cable.\n"
+            "2. Hold the button down and plug in the USB cable.\n"
+            "3. When the LED starts the bootloader blinking, release the button.\n"
+            "4. Choose the firmware file (.hex) and press Update. "
+            "When it finishes, unplug and replug the USB cable.")).grid(row=0, column=0, columnspan=3, sticky="w")
+        ttk.Label(f, text="Firmware file:").grid(row=1, column=0, sticky="w", pady=(10, 2))
+        self.fw_path = tk.StringVar()
+        ttk.Entry(f, textvariable=self.fw_path, width=60).grid(row=2, column=0, columnspan=2, sticky="ew")
+        ttk.Button(f, text="Browse…", command=self._on_fw_browse).grid(row=2, column=2, padx=6)
+        self.fw_btn = ttk.Button(f, text="Update", command=self._on_fw_update)
+        self.fw_btn.grid(row=3, column=0, sticky="w", pady=8)
+        self.fw_log = tk.Text(f, height=9, width=80, font=("Consolas", 9), state="disabled")
+        self.fw_log.grid(row=4, column=0, columnspan=3, sticky="nsew")
+        f.columnconfigure(1, weight=1)
+        f.rowconfigure(4, weight=1)
+
+    def _on_fw_browse(self):
+        path = filedialog.askopenfilename(title="Firmware file", filetypes=[("Intel HEX", "*.hex")])
+        if path:
+            self.fw_path.set(path)
+
+    def _fw_log_add(self, line):
+        self.fw_log.configure(state="normal")
+        self.fw_log.insert("end", line + "\n")
+        self.fw_log.see("end")
+        self.fw_log.configure(state="disabled")
+
+    def _on_fw_update(self):
+        if self.busy:
+            return
+        path = self.fw_path.get()
+        if not path:
+            messagebox.showwarning(APP_TITLE, "Choose a firmware file (.hex).")
+            return
+        try:
+            lo, hi, n = kl.check_app_hex(path)
+        except (OSError, RuntimeError, ValueError) as e:
+            messagebox.showerror(APP_TITLE, f"This file cannot be written.\n\n{e}")
+            return
+        avr = kl.find_avrdude()
+        if not avr:
+            messagebox.showerror(APP_TITLE, "avrdude was not found.\n\n"
+                                            "Put avrdude.exe and avrdude.conf in the same folder as this tool.")
+            return
+        if not messagebox.askyesno(APP_TITLE, f"Write this firmware ({n:,} bytes)?\n\n{path}\n\n"
+                                              "The K-Logger must be running the bootloader (see the steps)."):
+            return
+        if self.device.connected:
+            self._disconnect("Disconnected for the firmware update.")
+        self.fw_log.configure(state="normal")
+        self.fw_log.delete("1.0", "end")
+        self.fw_log.configure(state="disabled")
+
+        def done(rc):
+            if rc == 0:
+                self.status_var.set("Firmware updated.")
+                messagebox.showinfo(APP_TITLE, "Firmware updated.\nUnplug and replug the USB cable to start it.")
+            else:
+                self.status_var.set("Firmware update failed.")
+                messagebox.showerror(APP_TITLE, f"Firmware update failed (avrdude exit code {rc}).\n\n"
+                                                "Check that the K-Logger is running the bootloader.")
+
+        self._run("Updating firmware…", lambda: kl.update_firmware(
+            path, avr, output=lambda line: self.q.put(("fwlog", None, line))), done, "indeterminate")
+
     # ------------------------------------------------------------------
     # 非同期実行
     # ------------------------------------------------------------------
@@ -324,6 +395,8 @@ class App(tk.Tk):
                 elif kind == "live_error":
                     self._stop_live()
                     self._handle_error(payload)
+                elif kind == "fwlog":
+                    self._fw_log_add(payload)
                 elif kind == "progress":
                     n, total = payload
                     self.progress.configure(mode="determinate", maximum=max(total, 1), value=n)

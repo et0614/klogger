@@ -1,0 +1,1076 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>K-Logger 操作ページ</title>
+<meta name="description" content="扉開閉記録装置 K-Logger を USB でつないでブラウザから操作するページ">
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #ffffff; --ink: #1c2230; --sub: #5b6475; --line: #d8dce4;
+    --accent: #2357a6; --accent-ink: #ffffff; --warn: #a8480f; --warn-bg: #fdf1e7; --ok-bg: #e9f0fb;
+    --good: #2e9d48; --mid: #d9a400; --bad: #c62828;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12161d; --card: #1b2130; --ink: #e6eaf2; --sub: #9aa3b5; --line: #30384a;
+      --accent: #6d9be6; --accent-ink: #0d1320; --warn: #f0a26b; --warn-bg: #33241a; --ok-bg: #1c2740;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", Meiryo, sans-serif;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  h1 { font-size: 26px; margin: 0; letter-spacing: .02em; }
+  .head-links { display: flex; align-items: center; gap: 14px; font-size: 14px; }
+  .head-links a { color: var(--sub); }
+  .lead { color: var(--sub); margin: 4px 0 20px; font-size: 14px; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; margin-top: 16px; }
+  h2 { font-size: 17px; margin: 0 0 12px; }
+  h3 { font-size: 15px; margin: 22px 0 10px; padding-top: 16px; border-top: 1px solid var(--line); }
+  button {
+    font: inherit; padding: 9px 18px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--card); color: var(--ink); cursor: pointer;
+  }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button.small { padding: 4px 12px; font-size: 14px; }
+  button:disabled { opacity: .45; cursor: default; }
+  input[type=number], select {
+    font: inherit; width: 7.5em; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--ink);
+  }
+  label.check { display: inline-flex; align-items: center; gap: 6px; }
+  .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .row + .row { margin-top: 12px; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 20px; margin: 0; }
+  dt { color: var(--sub); }
+  dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .note { color: var(--sub); font-size: 14px; margin: 10px 0 0; }
+  .msg { border-radius: 8px; padding: 10px 14px; margin-top: 16px; font-size: 15px; }
+  .msg.warn { background: var(--warn-bg); color: var(--warn); }
+  .msg.ok { background: var(--ok-bg); }
+  progress { width: 100%; height: 10px; margin-top: 12px; }
+  [hidden] { display: none !important; }
+
+  .tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 20px; border-bottom: 1px solid var(--line); }
+  .tab { border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: none; padding: 8px 14px; color: var(--sub); }
+  .tab[aria-selected=true] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+  .panel { margin-top: 0; border-top: 0; border-radius: 0 0 10px 10px; }
+
+  .live { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-top: 14px; }
+  .live .value { font-size: 34px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.3; }
+  .live .unit { font-size: 16px; font-weight: 400; color: var(--sub); margin-left: 4px; }
+  .live .detail { color: var(--sub); font-size: 14px; font-variant-numeric: tabular-nums; }
+  .live svg { width: 100%; height: 60px; display: block; margin-top: 8px; }
+  .live polyline { fill: none; stroke: var(--accent); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+  .dim { opacity: .5; }
+
+  .ready { display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: var(--line); flex: none; }
+  .ready.good { background: var(--good); } .ready.mid { background: var(--mid); } .ready.bad { background: var(--bad); }
+  pre.result { margin: 12px 0 0; padding: 10px 14px; background: var(--bg); border-radius: 8px; font: 14px/1.7 ui-monospace, Consolas, monospace; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>K-Logger</h1>
+    <div class="head-links">
+      <a href="https://github.com/et0614/klogger" target="_blank" rel="noopener" data-i18n="repo"></a>
+      <button id="langBtn" class="small"></button>
+    </div>
+  </header>
+  <p class="lead" data-i18n="lead"></p>
+
+  <div id="unsupported" class="msg warn" hidden data-i18n="unsupported"></div>
+
+  <section id="connectBox">
+    <div class="row">
+      <button id="connectBtn" class="primary"></button>
+      <span id="connState"></span>
+    </div>
+  </section>
+
+  <div id="message" class="msg" hidden></div>
+
+  <div id="app" hidden>
+    <section>
+      <h2 data-i18n="info_title"></h2>
+      <dl>
+        <dt data-i18n="info_id"></dt><dd id="iId"></dd>
+        <dt data-i18n="info_fw"></dt><dd id="iFw"></dd>
+        <dt data-i18n="info_now"></dt><dd id="iNow"></dd>
+        <dt data-i18n="info_tof"></dt><dd id="iTof"></dd>
+        <dt data-i18n="info_count"></dt><dd id="iCount"></dd>
+        <dt data-i18n="info_period"></dt><dd id="iPeriod"></dd>
+        <dt data-i18n="info_batt"></dt><dd id="iBatt"></dd>
+      </dl>
+    </section>
+
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" data-tab="log" data-i18n="tab_log"></button>
+      <button class="tab" role="tab" data-tab="data" data-i18n="tab_data"></button>
+      <button class="tab" role="tab" data-tab="live" data-i18n="tab_live"></button>
+      <button class="tab" role="tab" data-tab="calib" data-i18n="tab_calib"></button>
+      <button class="tab" role="tab" data-tab="settings" data-i18n="tab_settings"></button>
+      <button class="tab" role="tab" data-tab="diag" data-i18n="tab_diag"></button>
+    </div>
+
+    <!-- 記録 -->
+    <section class="panel" data-panel="log">
+      <div class="row">
+        <label for="interval" data-i18n="log_interval"></label>
+        <input id="interval" type="number" min="1" max="600" step="1" value="1">
+        <span data-i18n="sec"></span>
+        <span id="capacity" class="note" style="margin:0"></span>
+      </div>
+      <div class="row"><button id="startBtn" class="primary" data-i18n="log_start"></button></div>
+      <p class="note" data-i18n="log_note"></p>
+      <p class="note" data-i18n="batt_note"></p>
+    </section>
+
+    <!-- データ -->
+    <section class="panel" data-panel="data" hidden>
+      <div class="row">
+        <button id="saveBtn" class="primary" data-i18n="data_save"></button>
+        <button id="eraseBtn" data-i18n="data_erase"></button>
+        <span id="saveState"></span>
+      </div>
+      <div class="row">
+        <label class="check"><input id="dailyChk" type="checkbox"> <span data-i18n="data_daily"></span></label>
+      </div>
+      <progress id="saveProg" value="0" max="1" hidden></progress>
+      <p class="note" data-i18n="data_note"></p>
+    </section>
+
+    <!-- ライブ表示 -->
+    <section class="panel" data-panel="live" hidden>
+      <div class="row">
+        <button id="liveBtn" class="primary"></button>
+        <span class="note" style="margin:0" data-i18n="live_note"></span>
+      </div>
+      <div class="live">
+        <div class="value"><span id="lvD">—</span><span class="unit">mm</span></div>
+        <div class="detail" id="lvDetail">&nbsp;</div>
+        <svg id="spD" viewBox="0 0 200 40" preserveAspectRatio="none"><polyline/></svg>
+      </div>
+    </section>
+
+    <!-- 校正 -->
+    <section class="panel" data-panel="calib" hidden>
+      <p class="note" style="margin:0 0 12px; white-space:pre-line" data-i18n="cal_howto"></p>
+      <div class="row">
+        <label for="calTarget" data-i18n="cal_target"></label>
+        <input id="calTarget" type="number" min="10" max="1000" step="1" value="140"> mm
+        <button id="calLiveBtn"></button>
+      </div>
+      <div class="live">
+        <div class="row" style="gap:10px">
+          <span id="calReady" class="ready"></span>
+          <span id="calStat1" class="detail">—</span>
+        </div>
+        <div id="calStat2" class="detail" style="margin-top:4px">&nbsp;</div>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <button id="calBtn" class="primary" data-i18n="cal_run"></button>
+        <button id="calRestoreBtn" data-i18n="cal_restore" disabled></button>
+        <button id="calZeroBtn" data-i18n="cal_zero"></button>
+      </div>
+      <pre id="calResult" class="result" hidden></pre>
+      <p class="note" data-i18n="cal_note"></p>
+    </section>
+
+    <!-- 測距条件 -->
+    <section class="panel" data-panel="settings" hidden>
+      <div class="row">
+        <label for="tofMode" data-i18n="set_mode"></label>
+        <select id="tofMode" style="width:auto">
+          <option value="short" data-i18n="mode_short"></option>
+          <option value="long" data-i18n="mode_long"></option>
+        </select>
+      </div>
+      <div class="row">
+        <label for="tofTb" data-i18n="set_tb"></label>
+        <select id="tofTb">
+          <option>15</option><option>20</option><option>33</option><option>50</option>
+          <option>100</option><option>200</option><option>500</option>
+        </select>
+        <span>ms</span>
+      </div>
+      <div class="row">
+        <label for="tofRoi" data-i18n="set_roi"></label>
+        <input id="tofRoi" type="number" min="4" max="16" step="1" value="4">
+        <span data-i18n="set_roi_unit"></span>
+      </div>
+      <div class="row"><button id="tofApplyBtn" class="primary" data-i18n="set_apply"></button></div>
+      <p class="note" data-i18n="set_note"></p>
+    </section>
+
+    <!-- 診断 -->
+    <section class="panel" data-panel="diag" hidden>
+      <div class="row"><button id="diagBtn" class="primary" data-i18n="diag_run"></button></div>
+      <pre id="diagResult" class="result" hidden></pre>
+      <p class="note" data-i18n="diag_note"></p>
+    </section>
+  </div>
+</main>
+
+<script>
+"use strict";
+
+// ------------------------------------------------------------
+// 表示の文言 (日本語 / English)
+// ------------------------------------------------------------
+const TEXT = {
+  ja: {
+    repo: "説明 (GitHub)",
+    lead: "扉開閉記録装置 K-Logger の操作ページです。USB でつないで、記録の開始、データの保存、距離センサの校正ができます。",
+    unsupported: "このブラウザでは使えません。パソコンの Chrome または Edge で開いてください。",
+    connect: "接続", disconnect: "切断",
+    conn_hint: "本体を USB でつないで「接続」を押し、一覧から K-Logger を選んでください。",
+    connecting: "接続しています…", connected: "接続しました。",
+    conn_failed: "接続できませんでした。{e}　ほかのソフトが同じ機器を使っていないか確かめ、USB を挿し直してからもう一度お試しください。",
+    unplugged: "USB が抜かれました。", lost: "接続が切れました",
+    not_klogger: "K-Logger ではない機器です（{d}）", no_response: "{cmd}: 応答がありません",
+    info_title: "機器の情報", info_id: "機体 ID", info_fw: "ファームウェア", info_now: "現在の距離",
+    info_tof: "測距条件", info_count: "保存データ", info_period: "記録期間", info_batt: "電池電圧",
+    tof_fmt: "{m} / {tb} ms / ROI {r}×{r} / オフセット {o} mm",
+    count_fmt: "{n} 件", count_interval: "（記録間隔 {s} 秒）",
+    tab_log: "記録", tab_data: "データ", tab_live: "ライブ表示", tab_calib: "校正", tab_settings: "測距条件", tab_diag: "診断",
+    sec: "秒",
+    log_interval: "記録間隔", log_start: "記録を開始",
+    log_note: "本体の時計をこのパソコンの時刻に合わせ、保存済みのデータを消去してから記録を始めます。開始すると本体は USB から切り離されます。ケーブルを抜いて設置してください。",
+    batt_life: "満充電の電池で {d}（参考値）", mem_life: "メモリは {d}分", limit_mem: "先にメモリがいっぱいになります。",
+    batt_note: "電池の持ちは、単4電池（約900mAh）での参考値です。電池の種類・温度・測距条件で変わります。USB につないだまま記録する場合は電池を使いません。記録を止めた後も電池は少しずつ減るので、使わないときは電池を抜いてください。",
+    dur_days: "約{v}日", dur_hours: "約{v}時間", dur_min: "約{v}分",
+    interval_bad: "記録間隔は 1〜600 秒の整数で入力してください。",
+    start_confirm_erase: "保存済みの {n} 件は消去されます。", start_confirm: "記録間隔 {s} 秒で記録を開始しますか？",
+    starting: "データを消去して記録を開始しています（最大1分ほどかかります）…",
+    started: "記録を開始しました。USB ケーブルを抜いて設置してください。読み出すときは、USB でつないでこのページで「接続」を押してください。",
+    start_failed: "記録を開始できませんでした。{e}",
+    data_save: "CSV で保存", data_erase: "データを消去",
+    data_daily: "日ごとの CSV（旧 v2 形式: yyyyMMdd.csv）も保存する",
+    data_note: "保存しても本体のデータは消えません。次に記録を開始したとき、または「データを消去」で消えます。日ごとの CSV は日数分のファイルをダウンロードします（ブラウザが複数ファイルのダウンロードの許可を求めることがあります）。",
+    no_data: "保存するデータがありません。", reading: "読み出し中… {a} / {b} 件",
+    saved: "{n} 件を {f} に保存しました。", saved_daily: "日ごとの CSV を {n} 個保存しました。",
+    saved_failed: "計測に失敗した記録が {n} 件あります（距離は空欄になります）。",
+    save_failed: "保存できませんでした。{e}",
+    dump_header: "データの読み出しに失敗しました (ヘッダ)", dump_short: "データの読み出しが途中で止まりました ({a}/{b} バイト)",
+    erase_confirm: "保存済みの {n} 件をすべて消去します。元に戻せません。よろしいですか？",
+    erasing: "データを消去しています…", erased: "データを消去しました。", erase_failed: "消去できませんでした。{e}",
+    live_start: "開始", stop: "停止", live_note: "距離を繰り返し測って表示します（保存はしません）。",
+    live_failed: "計測できませんでした。{e}",
+    live_detail: "{st}　signal {sg}　ambient {am}",
+    cal_howto: "1. 先に「測距条件」タブで、実際に使う条件にしておきます。\n2. グレーの板（反射率 17〜18% 程度、10cm 角以上）を、センサに正対させて既知の距離に置きます。140mm を推奨します。直射日光は避けてください。\n3. 「読み取り開始」を押し、表示が緑になったら「校正する」を押します。",
+    cal_target: "対象までの距離", cal_live_start: "読み取り開始", cal_live_stop: "読み取り停止",
+    cal_run: "校正する", cal_restore: "前のオフセットに戻す", cal_zero: "オフセットを 0 にする",
+    cal_now: "現在 {d} mm（{st}）", cal_stats: "現在 {d} mm（{st}）　平均 {m} mm　標準偏差 {s} mm　誤差 {e} mm",
+    cal_collect: "測定値を集めています（{a}/{b}）", cal_invalid: "無効な測定が {n}/{b} 回あります。対象の位置と大きさを確かめてください。",
+    cal_unstable: "測定値が安定していません（標準偏差 > {s} mm）。対象を動かさないでください。",
+    cal_ready: "安定しています。校正できます。",
+    cal_bad: "対象までの距離は 10〜1000 mm の整数で入力してください。",
+    cal_confirm: "対象を {d} mm に置いて校正しますか？ 50回測定し、新しいオフセットを本体に保存します。",
+    calibrating: "校正しています（数秒〜30秒）…",
+    cal_done: "{d} mm で校正しました: オフセット {p} → {o} mm（本体に保存しました）",
+    cal_detail: "\nオフセット0 での平均 {r} mm、標準偏差 {s} mm、{n} 回",
+    cal_warn: "\n注意: 測定値が安定していませんでした（標準偏差 > {s} mm）。前のオフセットに戻して、校正をやり直すことを検討してください。",
+    cal_offset_set: "オフセットを {o} mm にしました。", cal_failed: "校正できませんでした。{e}",
+    cal_note: "校正すると、ライブ表示と記録の距離にオフセットが加わります。校正後は対象を別の距離に動かして、正しく測れるか確かめてください。",
+    set_mode: "距離モード", mode_short: "short（〜約1.3m、外光に強い）", mode_long: "long（暗所で〜約4m、外光に弱い）",
+    set_tb: "タイミングバジェット", set_roi: "受光範囲 (ROI)", set_roi_unit: "×（4〜16）",
+    set_apply: "本体に保存",
+    set_note: "タイミングバジェットは1回の測距の時間です。長いほど値が安定し遠くまで測れますが、電池の消費が増えます（記録中の電流のほとんどは測距です）。扉の開閉の検出なら 20ms で十分です。15ms は short のみで、データシートの範囲外です。ROI は受光素子 16×16 のうち使う範囲で、小さいほど正面の狭い範囲だけを見ます。",
+    set_saved: "測距条件を保存しました。", set_failed: "保存できませんでした。{e}",
+    roi_bad: "ROI は 4〜16 の整数で入力してください。",
+    diag_run: "自己診断を実行", diag_note: "メモリ・距離センサ・測定を確かめます。数秒で終わります。",
+    diag_result: "メモリ　　: {fl}（JEDEC {j}、読み書き {rw}）\n距離センサ: {tf}（ID {id}）\n測定　　　: {me}（{d} mm、{st}）\n総合　　　: {all}",
+    diag_failed: "自己診断を実行できませんでした。{e}",
+    st_valid: "有効", st_sigma_fail: "ばらつき大", st_signal_fail: "信号弱", st_out_of_bounds: "範囲外",
+    st_wraparound: "折り返し", st_min_range: "近すぎ", st_other: "その他", st_failed: "計測失敗",
+    e_sensor_init_failed: "距離センサを起動できませんでした。", e_measure_failed: "距離センサから値を読めませんでした。",
+    e_calibration_failed: "校正の測定に失敗しました。対象の位置を確かめてください。",
+    e_invalid_tb_ms: "このタイミングバジェットは使えません（long では 15ms は不可）。",
+    e_invalid_roi: "ROI は 4〜16 です。", e_invalid_offset: "オフセットは −500〜500 mm です。",
+    e_invalid_sec: "記録間隔は 1〜600 秒です。", e_invalid_mm: "距離は 10〜1000 mm です。",
+    e_unknown_command: "この機能は本体のファームウェアが対応していません。ファームウェアを更新してください。",
+  },
+  en: {
+    repo: "Documentation (GitHub)",
+    lead: "Control page for the K-Logger door-opening logger. Connect it over USB to start logging, save data and calibrate the distance sensor.",
+    unsupported: "This browser is not supported. Please open this page in Chrome or Edge on a computer.",
+    connect: "Connect", disconnect: "Disconnect",
+    conn_hint: "Plug the logger in over USB, press Connect and choose K-Logger from the list.",
+    connecting: "Connecting…", connected: "Connected.",
+    conn_failed: "Could not connect. {e}  Check that no other software is using the device, re-plug the USB cable and try again.",
+    unplugged: "The USB cable was unplugged.", lost: "Connection lost",
+    not_klogger: "This device is not a K-Logger ({d})", no_response: "{cmd}: no response",
+    info_title: "Device", info_id: "Device ID", info_fw: "Firmware", info_now: "Current distance",
+    info_tof: "Ranging", info_count: "Stored data", info_period: "Logged period", info_batt: "Battery",
+    tof_fmt: "{m} / {tb} ms / ROI {r}×{r} / offset {o} mm",
+    count_fmt: "{n} records", count_interval: " (interval {s} s)",
+    tab_log: "Logging", tab_data: "Data", tab_live: "Live view", tab_calib: "Calibration", tab_settings: "Ranging", tab_diag: "Diagnostics",
+    sec: "s",
+    log_interval: "Logging interval", log_start: "Start logging",
+    log_note: "The logger's clock is set to this computer's time and the stored data is erased before logging starts. Once started, the logger disconnects from USB. Unplug the cable and place the logger.",
+    batt_life: "{d} on a fully charged battery (estimate)", mem_life: "memory holds {d}", limit_mem: "The memory fills up first.",
+    batt_note: "Battery life is an estimate for an AAA cell (about 900 mAh). It varies with the battery, temperature and ranging settings. Logging with USB connected does not use the battery. The battery keeps draining slowly after logging stops, so remove it when the logger is not in use.",
+    dur_days: "about {v} days", dur_hours: "about {v} hours", dur_min: "about {v} min",
+    interval_bad: "Enter the interval as a whole number from 1 to 600 seconds.",
+    start_confirm_erase: "The {n} stored records will be erased. ", start_confirm: "Start logging every {s} seconds?",
+    starting: "Erasing data and starting (up to about a minute)…",
+    started: "Logging has started. Unplug the USB cable and place the logger. To read the data, plug the logger in and press Connect on this page.",
+    start_failed: "Could not start logging. {e}",
+    data_save: "Save as CSV", data_erase: "Erase data",
+    data_daily: "Also save daily CSV files (legacy v2 format: yyyyMMdd.csv)",
+    data_note: "Saving does not erase the data on the logger. It is erased when you start logging again or press Erase data. Daily CSV downloads one file per day (the browser may ask to allow multiple downloads).",
+    no_data: "There is no data to save.", reading: "Reading… {a} / {b} records",
+    saved: "Saved {n} records to {f}. ", saved_daily: "Saved {n} daily CSV files. ",
+    saved_failed: "{n} records failed to measure (distance left blank).",
+    save_failed: "Could not save. {e}",
+    dump_header: "Failed to read data (header)", dump_short: "Data transfer stopped ({a}/{b} bytes)",
+    erase_confirm: "Erase all {n} stored records? This cannot be undone.",
+    erasing: "Erasing data…", erased: "Data erased.", erase_failed: "Could not erase. {e}",
+    live_start: "Start", stop: "Stop", live_note: "Measures the distance repeatedly (nothing is stored).",
+    live_failed: "Could not measure. {e}",
+    live_detail: "{st}   signal {sg}   ambient {am}",
+    cal_howto: "1. First choose the ranging settings you will actually use (Ranging tab).\n2. Place a grey target (about 17–18 % reflectance, 10 cm square or larger) facing the sensor at a known distance. 140 mm is recommended. Avoid direct sunlight.\n3. Press Start reading and wait until the indicator turns green, then press Calibrate.",
+    cal_target: "Target distance", cal_live_start: "Start reading", cal_live_stop: "Stop reading",
+    cal_run: "Calibrate", cal_restore: "Restore previous offset", cal_zero: "Reset offset to 0",
+    cal_now: "now {d} mm ({st})", cal_stats: "now {d} mm ({st})   mean {m} mm   SD {s} mm   error {e} mm",
+    cal_collect: "Collecting… ({a}/{b})", cal_invalid: "Some readings are invalid ({n}/{b}). Check the target position and size.",
+    cal_unstable: "Readings are not stable (SD > {s} mm). Keep the target still.",
+    cal_ready: "Stable. Ready to calibrate.",
+    cal_bad: "Enter the target distance as a whole number from 10 to 1000 mm.",
+    cal_confirm: "Calibrate with the target at {d} mm? The sensor takes 50 readings and stores the new offset in the device.",
+    calibrating: "Calibrating (a few seconds to 30 s)…",
+    cal_done: "Calibrated at {d} mm: offset {p} → {o} mm (saved to the device)",
+    cal_detail: "\nRaw mean {r} mm, SD {s} mm, {n} readings",
+    cal_warn: "\nWARNING: readings were not stable (SD > {s} mm). Consider restoring the previous offset and calibrating again.",
+    cal_offset_set: "Offset set to {o} mm.", cal_failed: "Could not calibrate. {e}",
+    cal_note: "The offset applies to the live view and to logged distances. After calibrating, move the target to another distance to check the result.",
+    set_mode: "Distance mode", mode_short: "short (up to ~1.3 m, robust to ambient light)", mode_long: "long (up to ~4 m in the dark, sensitive to ambient light)",
+    set_tb: "Timing budget", set_roi: "Receiving area (ROI)", set_roi_unit: "× (4–16)",
+    set_apply: "Save to device",
+    set_note: "The timing budget is the duration of one ranging. Longer gives steadier readings and longer range but uses more battery (most of the logging current is ranging). 20 ms is enough to detect a door opening. 15 ms works in short mode only and is outside the datasheet. ROI is the part of the 16×16 receiver used; smaller looks at a narrower area straight ahead.",
+    set_saved: "Ranging settings saved.", set_failed: "Could not save. {e}",
+    roi_bad: "Enter the ROI as a whole number from 4 to 16.",
+    diag_run: "Run self-test", diag_note: "Checks the memory, the distance sensor and a measurement. Takes a few seconds.",
+    diag_result: "Memory  : {fl} (JEDEC {j}, read/write {rw})\nSensor  : {tf} (ID {id})\nMeasure : {me} ({d} mm, {st})\nOverall : {all}",
+    diag_failed: "Could not run the self-test. {e}",
+    st_valid: "valid", st_sigma_fail: "sigma fail", st_signal_fail: "signal fail", st_out_of_bounds: "out of bounds",
+    st_wraparound: "wraparound", st_min_range: "min range", st_other: "other", st_failed: "failed",
+    e_sensor_init_failed: "Could not start the distance sensor.", e_measure_failed: "Could not read the distance sensor.",
+    e_calibration_failed: "Calibration measurement failed. Check the target position.",
+    e_invalid_tb_ms: "This timing budget cannot be used (15 ms is not allowed in long mode).",
+    e_invalid_roi: "ROI must be 4–16.", e_invalid_offset: "Offset must be −500 to 500 mm.",
+    e_invalid_sec: "The interval must be 1–600 seconds.", e_invalid_mm: "The distance must be 10–1000 mm.",
+    e_unknown_command: "The logger's firmware does not support this function. Please update the firmware.",
+  },
+};
+
+let lang = "ja";
+try {
+  lang = localStorage.getItem("klogger_lang") || (navigator.language.startsWith("ja") ? "ja" : "en");
+} catch (e) {
+  lang = navigator.language.startsWith("ja") ? "ja" : "en";
+}
+if (!TEXT[lang]) lang = "ja";
+
+function t(key, vars) {
+  let s = TEXT[lang][key];
+  if (s === undefined) s = key;
+  if (vars) for (const k in vars) s = s.split(`{${k}}`).join(String(vars[k]));
+  return s;
+}
+
+const $ = (id) => document.getElementById(id);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// ------------------------------------------------------------
+// 通信 (USB-CDC / JSON 1行=1コマンド。dump の本体だけバイナリ)
+// ------------------------------------------------------------
+const USB_FILTER = { usbVendorId: 0x04D8, usbProductId: 0x0B15 };   // C-Logger と共通。hello の device 名で確かめる
+const DEVICE_NAME = "K-Logger";
+const REC_SIZE = 2;              // uint16: bit12-0 距離[mm]、bit15-13 状態 (little-endian)
+const REC_FAILED = 0xFFFE;       // 計測できなかった記録
+const STATUS_NAMES = ["valid", "sigma_fail", "signal_fail", "out_of_bounds", "wraparound", "min_range", "other", "failed"];
+// measure 応答の status (VL53L1X ULD のレンジステータス番号)
+const ULD_STATUS = { 0: "valid", 1: "sigma_fail", 2: "signal_fail", 3: "min_range", 4: "out_of_bounds", 7: "wraparound" };
+const DUMP_CHUNK = 32768;        // dump_range 1回あたりのレコード数 (64KB)
+
+function decodeRecord(v) {
+  if (v === REC_FAILED) return [null, "failed"];
+  return [v & 0x1FFF, STATUS_NAMES[(v >> 13) & 7]];
+}
+const uldStatus = (n) => ULD_STATUS[n] || "other";
+const stText = (name) => t("st_" + name);
+
+class DeviceError extends Error {
+  constructor(message, code) { super(message); this.code = code; }
+}
+
+class KLogger {
+  constructor(port) {
+    this.port = port;
+    this.buf = new Uint8Array(0);   // 受信済みで未処理のバイト
+    this.wake = null;               // 受信を待っている処理を起こす関数
+    this.closed = false;
+    this.id = 0;
+  }
+
+  async open() {
+    await this.port.open({ baudRate: 115200 });   // USB-CDC なのでボーレートは使われない
+    this.writer = this.port.writable.getWriter();
+    this.reader = this.port.readable.getReader();
+    this.pump = this._pump();
+    await sleep(200);
+    this.buf = new Uint8Array(0);                 // 接続前に溜まっていた分を捨てる
+  }
+
+  async _pump() {
+    try {
+      for (;;) {
+        const { value, done } = await this.reader.read();
+        if (done) break;
+        if (value && value.length) {
+          const merged = new Uint8Array(this.buf.length + value.length);
+          merged.set(this.buf); merged.set(value, this.buf.length);
+          this.buf = merged;
+          if (this.wake) this.wake();
+        }
+      }
+    } catch (e) {
+      // 抜かれた、または本体が USB から切り離れた
+    }
+    this.closed = true;
+    if (this.wake) this.wake();
+  }
+
+  async close() {
+    this.closed = true;
+    try { await this.reader.cancel(); } catch (e) {}
+    try { await this.pump; } catch (e) {}
+    try { this.reader.releaseLock(); } catch (e) {}
+    try { this.writer.releaseLock(); } catch (e) {}
+    try { await this.port.close(); } catch (e) {}
+  }
+
+  _waitData(ms) {
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => { this.wake = null; resolve(false); }, ms);
+      this.wake = () => { clearTimeout(timer); this.wake = null; resolve(true); };
+    });
+  }
+
+  _take(n) {
+    const out = this.buf.slice(0, n);
+    this.buf = this.buf.slice(n);
+    return out;
+  }
+
+  // JSON の行を1つ読む。'{' で始まらない行は読み飛ばす。時間切れなら null
+  async _readJsonLine(ms) {
+    const deadline = Date.now() + ms;
+    for (;;) {
+      const nl = this.buf.indexOf(0x0A);
+      if (nl >= 0) {
+        const line = new TextDecoder().decode(this._take(nl + 1)).trim();
+        if (line.startsWith("{")) {
+          try { return JSON.parse(line); } catch (e) { return null; }
+        }
+        continue;
+      }
+      const left = deadline - Date.now();
+      if (left <= 0 || this.closed) return null;
+      await this._waitData(left);
+    }
+  }
+
+  async _send(command, params) {
+    if (this.closed) throw new Error(t("lost"));
+    const req = { id: ++this.id, command };
+    if (params !== undefined) req.params = params;
+    await this.writer.write(new TextEncoder().encode(JSON.stringify(req) + "\n"));
+    return this.id;
+  }
+
+  // コマンドを送って応答を返す。応答が無い・エラー応答なら例外
+  async request(command, params, waitMs = 3000) {
+    const rid = await this._send(command, params);
+    for (;;) {
+      const j = await this._readJsonLine(waitMs);
+      if (j === null) throw new Error(this.closed ? t("lost") : t("no_response", { cmd: command }));
+      if (j.id === rid) {
+        if (!j.ok && j.error) {
+          const friendly = TEXT[lang]["e_" + j.error];
+          throw new DeviceError(friendly || `${command}: ${j.error}`, j.error);
+        }
+        return j;
+      }
+    }
+  }
+
+  // レコード [start, start+count) を生のバイト列で受け取る。onBytes(受信済みバイト数) を随時呼ぶ
+  async dumpRange(start, count, onBytes) {
+    const rid = await this._send("dump_range", { start, count });
+    const hdr = await this._readJsonLine(5000);
+    if (!hdr || hdr.id !== rid || hdr.dump !== "begin") throw new Error(t("dump_header"));
+    const size = hdr.rec_size || REC_SIZE;
+    const total = hdr.count * size;
+    const raw = new Uint8Array(total);
+    let got = 0;
+    while (got < total) {
+      if (this.buf.length === 0) {
+        if (this.closed || !(await this._waitData(6000))) break;
+        continue;
+      }
+      const part = this._take(Math.min(this.buf.length, total - got));
+      raw.set(part, got);
+      got += part.length;
+      if (onBytes) onBytes(got);
+    }
+    if (got < total) throw new Error(t("dump_short", { a: got, b: total }));
+    await this._readJsonLine(3000);   // フッタ
+    return { hdr, raw, size };
+  }
+}
+
+// ------------------------------------------------------------
+// 表示の補助
+// ------------------------------------------------------------
+const pad = (n) => String(n).padStart(2, "0");
+function fmtTime(epoch, compact = false) {
+  const d = new Date(epoch * 1000);
+  const ymd = [d.getFullYear(), pad(d.getMonth() + 1), pad(d.getDate())];
+  const hms = [pad(d.getHours()), pad(d.getMinutes()), pad(d.getSeconds())];
+  return compact ? `${ymd.join("")}_${hms.join("")}` : `${ymd.join("-")} ${hms.join(":")}`;
+}
+
+function fmtDuration(sec) {
+  if (sec >= 2 * 86400) return t("dur_days", { v: (sec / 86400).toFixed(sec >= 20 * 86400 ? 0 : 1) });
+  if (sec >= 2 * 3600) return t("dur_hours", { v: (sec / 3600).toFixed(1) });
+  return t("dur_min", { v: Math.max(1, Math.round(sec / 60)) });
+}
+
+const signed = (v, digits) => (v >= 0 ? "+" : "") + v.toFixed(digits);
+
+function download(name, parts) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(parts, { type: "text/csv" }));
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+
+// ------------------------------------------------------------
+// 画面の状態
+// ------------------------------------------------------------
+let dev = null;         // 接続中の KLogger
+let info = null;        // 接続時に読んだ情報 { hello, id, status, batt, tof, now }
+let busy = false;       // 通信中 (ほかの操作を止める)
+let stopReq = false;    // ライブ表示への中止の要求
+let running = null;     // 実行中の連続処理 ("live")
+let prevOffset = null;  // 校正の前のオフセット (「前のオフセットに戻す」用)
+
+function showMessage(text, kind) {
+  const m = $("message");
+  if (!text) { m.hidden = true; return; }
+  m.textContent = text;
+  m.className = "msg " + (kind || "ok");
+  m.hidden = false;
+}
+
+// 操作中はほかのボタンと入力を止める。keep に渡したボタン (停止ボタン) だけは押せるままにする
+function setBusy(on, keep) {
+  busy = on;
+  const keeps = Array.isArray(keep) ? keep : [keep];
+  document.querySelectorAll("#connectBox button, #app button, #app input, #app select").forEach((el) => {
+    el.disabled = on && !keeps.includes(el);
+  });
+  if (!on) updateEnabled();
+}
+
+function updateEnabled() {
+  if (!info) return;
+  const n = info.status.count;
+  $("saveBtn").disabled = n === 0;
+  $("eraseBtn").disabled = n === 0;
+  $("calRestoreBtn").disabled = prevOffset === null;
+}
+
+function selectTab(name) {
+  document.querySelectorAll(".tab").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
+  document.querySelectorAll(".panel").forEach((p) => { p.hidden = p.dataset.panel !== name; });
+}
+
+function render() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = t(el.dataset.i18n); });
+  $("langBtn").textContent = lang === "ja" ? "English" : "日本語";
+  $("connectBtn").textContent = dev ? t("disconnect") : t("connect");
+  $("connState").textContent = info ? t("connected") : (busy ? t("connecting") : t("conn_hint"));
+  $("liveBtn").textContent = running === "live" ? t("stop") : t("live_start");
+  $("calLiveBtn").textContent = running === "live" ? t("cal_live_stop") : t("cal_live_start");
+  renderInfo();
+}
+
+function renderInfo() {
+  if (!info) return;
+  const { hello, id, status, batt, tof, now } = info;
+  $("iId").textContent = id;
+  $("iFw").textContent = hello.fw;
+  $("iNow").textContent = now ? `${now.distance_mm} mm（${stText(uldStatus(now.status))}）` : "—";
+  $("iTof").textContent = t("tof_fmt", { m: tof.mode, tb: tof.tb_ms, r: tof.roi, o: tof.offset_mm });
+  const n = status.count;
+  $("iCount").textContent = t("count_fmt", { n: n.toLocaleString() }) + (n > 0 ? t("count_interval", { s: status.interval }) : "");
+  $("iPeriod").textContent = n > 0
+    ? `${fmtTime(status.start_dt)} 〜 ${fmtTime(status.start_dt + (n - 1) * status.interval)}`
+    : "—";
+  $("iBatt").textContent = `${(batt.vbat_mV / 1000).toFixed(2)} V`;
+  updateCapacity();
+}
+
+// 電池の持ちの見積もり (単4電池1本)。消費電流は実測値 (README「消費電流・電池寿命」、2026-11-20) に基づく。
+//   測距の合間 (マイコンのスリープ・距離センサの待機・昇圧IC) は常時 約0.2mA。
+//   測距1回の電荷は タイミングバジェット [ms] × 0.02 mA·s (50ms で約0.9mA、20ms で約0.4mA @1秒間隔)。
+//   いずれも電池側 (1.2〜1.5V)。電池電圧が下がると電流が増えるので BATT_MARGIN を掛けて短めに出す
+//   (Eneloop Pro・50ms での設置実績は計算の約半分だった)。
+const BATT_CAPACITY_MAH = 900;
+const BATT_BASE_MA = 0.2;
+const BATT_SHOT_MAS_PER_MS = 0.02;
+const BATT_MARGIN = 2.0;
+
+function batteryLifeSec(sec) {
+  const tb = info.tof.tb_ms || 20;
+  const avg = (BATT_BASE_MA + BATT_SHOT_MAS_PER_MS * tb / sec) * BATT_MARGIN;   // 平均電流 [mA]
+  return BATT_CAPACITY_MAH / avg * 3600;
+}
+
+function updateCapacity() {
+  const sec = Number($("interval").value);
+  if (!info || !(sec >= 1 && sec <= 600)) { $("capacity").textContent = ""; return; }
+  const mem = info.status.capacity * sec, batt = batteryLifeSec(sec);
+  $("capacity").textContent = t("batt_life", { d: fmtDuration(batt) }) +
+    (mem < batt * 3 ? " ／ " + t("mem_life", { d: fmtDuration(mem) }) : "") +
+    (mem < batt ? "　" + t("limit_mem") : "");
+}
+
+function fillTofInputs() {
+  $("tofMode").value = info.tof.mode;
+  $("tofTb").value = String(info.tof.tb_ms);
+  $("tofRoi").value = info.tof.roi;
+}
+
+const errText = (e) => ((!dev || dev.closed) ? t("lost") : e.message);
+
+async function dropIfLost() {
+  if (dev && dev.closed) { await disconnect(); return true; }
+  return false;
+}
+
+// ------------------------------------------------------------
+// 接続
+// ------------------------------------------------------------
+async function readInfo() {
+  const hello = await dev.request("hello");
+  if (hello.device !== DEVICE_NAME) throw new Error(t("not_klogger", { d: hello.device }));
+  const id = (await dev.request("get_id")).device_id;
+  const status = await dev.request("get_status");
+  const batt = await dev.request("get_battery");
+  const tof = await dev.request("get_tof");
+  let now = null;
+  try { now = await dev.request("measure", undefined, 5000); } catch (e) { /* センサの異常は表示で知らせる */ }
+  info = { hello, id, status, batt, tof, now };
+}
+
+async function refreshStatus() {
+  info.status = await dev.request("get_status");
+  renderInfo();
+}
+
+async function disconnect() {
+  const d = dev;
+  dev = null; info = null; running = null; stopReq = true; prevOffset = null;
+  if (d) await d.close();
+  $("app").hidden = true;
+  setBusy(false);
+  render();
+}
+
+async function connect() {
+  showMessage("");
+  // 前に許可した機器が1台だけ見つかれば、選択画面を出さずにそれを使う
+  let port = null;
+  const known = (await navigator.serial.getPorts()).filter((p) => {
+    const i = p.getInfo();
+    return i.usbVendorId === USB_FILTER.usbVendorId && i.usbProductId === USB_FILTER.usbProductId;
+  });
+  if (known.length === 1) port = known[0];
+  if (!port) {
+    try {
+      port = await navigator.serial.requestPort({ filters: [USB_FILTER] });
+    } catch (e) {
+      return;   // 選択画面を閉じた
+    }
+  }
+  setBusy(true);
+  $("connState").textContent = t("connecting");
+  try {
+    dev = new KLogger(port);
+    await dev.open();
+    await readInfo();
+    const iv = info.status.interval;
+    $("interval").value = iv >= 1 && iv <= 600 ? iv : 1;
+    fillTofInputs();
+    for (const id of ["calResult", "diagResult"]) $(id).hidden = true;
+    $("lvD").textContent = "—"; $("lvDetail").innerHTML = "&nbsp;";
+    liveHist = []; calBuf = [];
+    drawSpark($("spD"), liveHist);
+    renderCalStats(null);
+    $("saveState").textContent = "";
+    selectTab("log");
+    $("app").hidden = false;
+    setBusy(false);
+    render();
+  } catch (e) {
+    const msg = e.message;
+    await disconnect();
+    showMessage(t("conn_failed", { e: msg }), "warn");
+  }
+}
+
+// ------------------------------------------------------------
+// 記録・データ
+// ------------------------------------------------------------
+async function startLogging() {
+  const sec = Number($("interval").value);
+  if (!Number.isInteger(sec) || sec < 1 || sec > 600) { showMessage(t("interval_bad"), "warn"); return; }
+  const n = info.status.count;
+  const ask = (n > 0 ? t("start_confirm_erase", { n: n.toLocaleString() }) : "") + t("start_confirm", { s: sec });
+  if (!confirm(ask)) return;
+
+  setBusy(true);
+  showMessage(t("starting"), "ok");
+  try {
+    await dev.request("set_interval", { sec });
+    await dev.request("set_time", { epoch: Math.floor(Date.now() / 1000) });
+    await dev.request("start_logging", undefined, 120000);   // 本体が消去してから記録を始める。応答の後は USB が切れる
+    await disconnect();
+    showMessage(t("started"), "ok");
+  } catch (e) {
+    showMessage(t("start_failed", { e: errText(e) }), "warn");
+    await dropIfLost();
+    setBusy(false);
+  }
+}
+
+async function saveCsv() {
+  setBusy(true);
+  showMessage("");
+  const prog = $("saveProg");
+  try {
+    const status = await dev.request("get_status");
+    const total = status.count;
+    if (total === 0) throw new Error(t("no_data"));
+    prog.max = total; prog.value = 0; prog.hidden = false;
+
+    const daily = $("dailyChk").checked;
+    const parts = ["index,epoch,datetime,distance_mm,status\r\n"];
+    const days = new Map();   // "yyyyMMdd" → 行の配列 (v2 形式 "HH:MM:SS,距離")
+    let startDt = status.start_dt, interval = status.interval, failed = 0;
+
+    for (let start = 0; start < total; start += DUMP_CHUNK) {
+      const cnt = Math.min(DUMP_CHUNK, total - start);
+      const { hdr, raw } = await dev.dumpRange(start, cnt, (bytes) => {
+        const done = start + Math.floor(bytes / REC_SIZE);
+        prog.value = done;
+        $("saveState").textContent = t("reading", { a: done.toLocaleString(), b: total.toLocaleString() });
+      });
+      startDt = hdr.start_dt; interval = hdr.interval;
+      const view = new DataView(raw.buffer);
+      const lines = [];
+      for (let i = 0; i < hdr.count; i++) {
+        const [dist, st] = decodeRecord(view.getUint16(i * 2, true));
+        if (st === "failed") failed++;
+        const idx = start + i, ts = startDt + idx * interval;
+        const time = fmtTime(ts);
+        lines.push(`${idx},${ts},${time},${dist === null ? "" : dist},${st}`);
+        if (daily) {
+          const key = time.slice(0, 10).replaceAll("-", "");
+          if (!days.has(key)) days.set(key, []);
+          days.get(key).push(`${time.slice(11)},${dist === null ? "" : dist}`);
+        }
+      }
+      parts.push(lines.join("\r\n") + "\r\n");
+    }
+
+    const name = `klogger_${info.id}_${fmtTime(startDt, true)}.csv`;
+    download(name, parts);
+    let msg = t("saved", { n: total.toLocaleString(), f: name });
+    if (daily) {
+      for (const [key, rows] of days) {
+        await sleep(300);   // 続けてダウンロードすると取りこぼすブラウザがあるので間を空ける
+        download(`${key}.csv`, [rows.join("\r\n") + "\r\n"]);
+      }
+      msg += t("saved_daily", { n: days.size });
+    }
+    showMessage(msg + (failed > 0 ? t("saved_failed", { n: failed }) : ""), "ok");
+  } catch (e) {
+    showMessage(t("save_failed", { e: errText(e) }), "warn");
+    if (await dropIfLost()) return;
+  }
+  $("saveState").textContent = "";
+  prog.hidden = true;
+  setBusy(false);
+}
+
+async function eraseData() {
+  if (!confirm(t("erase_confirm", { n: info.status.count.toLocaleString() }))) return;
+  setBusy(true);
+  showMessage(t("erasing"), "ok");
+  try {
+    await dev.request("clear_memory", undefined, 120000);
+    await refreshStatus();
+    showMessage(t("erased"), "ok");
+  } catch (e) {
+    showMessage(t("erase_failed", { e: errText(e) }), "warn");
+    if (await dropIfLost()) return;
+  }
+  setBusy(false);
+}
+
+// ------------------------------------------------------------
+// ライブ表示 (ライブ表示タブと校正タブで共用)
+// ------------------------------------------------------------
+const LIVE_KEEP = 300;          // グラフに残す点数
+const CAL_WINDOW = 20;          // 校正の判定に使う直近の測定数
+const CAL_READY_SD = 3.0;       // これ以下のばらつきなら「校正できる」
+const CAL_WARN_SD = 5.0;        // 校正結果のばらつきがこれを超えたら注意を出す
+let liveHist = [];
+let calBuf = [];                // 直近の測定 (無効は null)
+
+function drawSpark(svg, values) {
+  const line = svg.querySelector("polyline");
+  if (values.length < 2) { line.setAttribute("points", ""); return; }
+  let lo = Math.min(...values), hi = Math.max(...values);
+  if (hi - lo < 1e-9) { lo -= 1; hi += 1; }
+  const step = 200 / (LIVE_KEEP - 1), x0 = 200 - step * (values.length - 1);
+  line.setAttribute("points", values.map((v, i) =>
+    `${(x0 + i * step).toFixed(1)},${(38 - 36 * (v - lo) / (hi - lo)).toFixed(1)}`).join(" "));
+}
+
+function mean(a) { return a.reduce((x, y) => x + y, 0) / a.length; }
+function sd(a) { const m = mean(a); return Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / (a.length - 1)); }
+
+// 校正タブの統計と準備状態の表示
+function renderCalStats(m) {
+  const dot = $("calReady");
+  dot.className = "ready";
+  if (!m) { $("calStat1").textContent = "—"; $("calStat2").innerHTML = "&nbsp;"; return; }
+  const st = stText(uldStatus(m.status));
+  const vals = calBuf.filter((v) => v !== null);
+  const target = Number($("calTarget").value);
+  let s = null;
+  if (vals.length >= 2) {
+    s = sd(vals);
+    const mm = mean(vals);
+    $("calStat1").textContent = t("cal_stats", {
+      d: m.distance_mm, st, m: mm.toFixed(1), s: s.toFixed(1),
+      e: Number.isInteger(target) ? signed(mm - target, 1) : "—",
+    });
+  } else {
+    $("calStat1").textContent = t("cal_now", { d: m.distance_mm, st });
+  }
+  const full = calBuf.length === CAL_WINDOW;
+  if (full && vals.length === CAL_WINDOW && s !== null && s <= CAL_READY_SD) {
+    dot.classList.add("good");
+    $("calStat2").textContent = t("cal_ready");
+  } else {
+    dot.classList.add(vals.length ? "mid" : "bad");
+    $("calStat2").textContent = !full ? t("cal_collect", { a: calBuf.length, b: CAL_WINDOW })
+      : vals.length < CAL_WINDOW ? t("cal_invalid", { n: CAL_WINDOW - vals.length, b: CAL_WINDOW })
+      : t("cal_unstable", { s: CAL_READY_SD.toFixed(0) });
+  }
+}
+
+async function toggleLive() {
+  if (running === "live") { stopReq = true; return; }
+  running = "live"; stopReq = false;
+  setBusy(true, [$("liveBtn"), $("calLiveBtn"), $("calTarget"), $("calBtn")]);
+  showMessage("");
+  render();
+  try {
+    while (!stopReq) {
+      const started = Date.now();
+      const m = await dev.request("measure", undefined, 5000);
+      const name = uldStatus(m.status), valid = m.status === 0;
+      $("lvD").textContent = String(m.distance_mm);
+      $("lvD").parentElement.classList.toggle("dim", !valid);
+      $("lvDetail").textContent = t("live_detail", { st: stText(name), sg: m.signal, am: m.ambient });
+      if (valid) { liveHist.push(m.distance_mm); if (liveHist.length > LIVE_KEEP) liveHist.shift(); }
+      drawSpark($("spD"), liveHist);
+      calBuf.push(valid ? m.distance_mm : null);
+      if (calBuf.length > CAL_WINDOW) calBuf.shift();
+      renderCalStats(m);
+      info.now = m;
+      $("iNow").textContent = `${m.distance_mm} mm（${stText(name)}）`;
+      const wait = 250 - (Date.now() - started);
+      if (wait > 0 && !stopReq) await sleep(wait);
+    }
+  } catch (e) {
+    showMessage(t("live_failed", { e: errText(e) }), "warn");
+  }
+  if (!dev || await dropIfLost()) return;
+  running = null;
+  setBusy(false);
+  render();
+}
+
+// ------------------------------------------------------------
+// 校正 (距離のオフセット)
+// ------------------------------------------------------------
+async function calibrate() {
+  const target = Number($("calTarget").value);
+  if (!Number.isInteger(target) || target < 10 || target > 1000) { showMessage(t("cal_bad"), "warn"); return; }
+  if (!confirm(t("cal_confirm", { d: target }))) return;
+  // 読み取り中なら止めてから校正する
+  if (running === "live") {
+    stopReq = true;
+    while (running === "live" && dev) await sleep(50);
+    if (!dev) return;
+  }
+  setBusy(true);
+  showMessage(t("calibrating"), "ok");
+  const out = $("calResult");
+  try {
+    const r = await dev.request("calibrate", { mm: target }, 60000);
+    const prev = r.prev_offset_mm !== undefined ? r.prev_offset_mm : info.tof.offset_mm;
+    prevOffset = prev;
+    let text = t("cal_done", { d: target, p: prev, o: r.offset_mm });
+    if (r.raw_mm !== undefined) {
+      const s = r.std_x10 / 10;
+      text += t("cal_detail", { r: r.raw_mm, s: s.toFixed(1), n: r.n });
+      if (s > CAL_WARN_SD) text += t("cal_warn", { s: CAL_WARN_SD.toFixed(0) });
+    }
+    out.textContent = text; out.hidden = false;
+    calBuf = [];
+    info.tof = await dev.request("get_tof");
+    renderInfo();
+    showMessage("");
+  } catch (e) {
+    showMessage(t("cal_failed", { e: errText(e) }), "warn");
+    if (await dropIfLost()) return;
+  }
+  setBusy(false);
+}
+
+async function setOffset(mm) {
+  setBusy(true);
+  try {
+    info.tof = await dev.request("set_tof", { offset_mm: mm });
+    calBuf = [];
+    renderInfo();
+    const out = $("calResult");
+    out.textContent = t("cal_offset_set", { o: info.tof.offset_mm }); out.hidden = false;
+    showMessage("");
+  } catch (e) {
+    showMessage(t("cal_failed", { e: errText(e) }), "warn");
+    if (await dropIfLost()) return;
+  }
+  setBusy(false);
+}
+
+// ------------------------------------------------------------
+// 測距条件
+// ------------------------------------------------------------
+async function applyTof() {
+  const mode = $("tofMode").value, tb_ms = Number($("tofTb").value), roi = Number($("tofRoi").value);
+  if (!Number.isInteger(roi) || roi < 4 || roi > 16) { showMessage(t("roi_bad"), "warn"); return; }
+  setBusy(true);
+  try {
+    info.tof = await dev.request("set_tof", { mode, tb_ms, roi });
+    fillTofInputs();
+    renderInfo();
+    showMessage(t("set_saved"), "ok");
+  } catch (e) {
+    showMessage(t("set_failed", { e: errText(e) }), "warn");
+    if (await dropIfLost()) return;
+    fillTofInputs();
+  }
+  setBusy(false);
+}
+
+// ------------------------------------------------------------
+// 診断
+// ------------------------------------------------------------
+async function runSelftest() {
+  setBusy(true);
+  showMessage("");
+  const out = $("diagResult");
+  try {
+    const r = await dev.request("selftest", undefined, 10000);
+    const ok = (b) => (b ? "OK" : "NG");
+    const fl = r.flash, tf = r.tof, ms = r.measure;
+    out.textContent = t("diag_result", {
+      fl: ok(fl.ok && fl.rw), j: fl.jedec, rw: ok(fl.rw), tf: ok(tf.ok), id: tf.sensor_id,
+      me: ok(ms.ok), d: ms.distance_mm, st: stText(uldStatus(ms.status)), all: ok(r.ok),
+    });
+    out.hidden = false;
+  } catch (e) {
+    out.hidden = true;
+    showMessage(t("diag_failed", { e: errText(e) }), "warn");
+    if (await dropIfLost()) return;
+  }
+  setBusy(false);
+}
+
+// ------------------------------------------------------------
+// 起動
+// ------------------------------------------------------------
+render();
+$("langBtn").addEventListener("click", () => {
+  lang = lang === "ja" ? "en" : "ja";
+  try { localStorage.setItem("klogger_lang", lang); } catch (e) {}
+  if (!busy) showMessage("");
+  render();
+});
+
+if (!("serial" in navigator)) {
+  $("unsupported").hidden = false;
+  $("connectBox").hidden = true;
+} else {
+  $("connectBtn").addEventListener("click", async () => {
+    if (busy && running !== "live") return;
+    if (dev) { await disconnect(); showMessage(""); } else { await connect(); }
+  });
+  document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => {
+    if (!busy || running === "live") selectTab(b.dataset.tab);
+  }));
+  const on = (id, fn) => $(id).addEventListener("click", () => { if (dev && !busy) fn(); });
+  on("startBtn", startLogging);
+  on("saveBtn", saveCsv);
+  on("eraseBtn", eraseData);
+  $("calBtn").addEventListener("click", () => { if (dev && (!busy || running === "live")) calibrate(); });
+  on("calRestoreBtn", () => { if (prevOffset !== null) setOffset(prevOffset); });
+  on("calZeroBtn", () => setOffset(0));
+  on("tofApplyBtn", applyTof);
+  on("diagBtn", runSelftest);
+  // 開始と停止を兼ねるボタンは、実行中でも押せる
+  for (const id of ["liveBtn", "calLiveBtn"]) {
+    $(id).addEventListener("click", () => { if (dev && (!busy || running === "live")) toggleLive(); });
+  }
+  $("interval").addEventListener("input", updateCapacity);
+  $("calTarget").addEventListener("input", () => { if (info && info.now && running === "live") renderCalStats(info.now); });
+  navigator.serial.addEventListener("disconnect", async (ev) => {
+    if (dev && ev.target === dev.port) {
+      const wasBusy = busy;
+      await disconnect();
+      if (!wasBusy) showMessage(t("unplugged"), "warn");
+    }
+  });
+}
+</script>
+</body>
+</html>

@@ -155,7 +155,10 @@ static void handleButton(void)
         turnOnGreenLED();
         if (++s_reset_timer >= RESET_HOLD_SEC)
         {
-            while (!SW_GetValue()) ; // 離されるまで待ってからリセット
+            // 離されるまで待ってからリセットする。押したまま起動するとブートローダに入るため
+            // (euboot は起動時にボタン PA7 を読む)。離したときのチャタリングも待つ
+            while (!SW_GetValue()) ;
+            DELAY_milliseconds(50);
             safeReset();
         }
     }

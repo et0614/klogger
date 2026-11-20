@@ -8,6 +8,8 @@
 #include "mcc_generated_files/usb/usb_common/usb_core_transfer.h"     // USB_TransferControlDataSet
 #include "mcc_generated_files/timer/delay.h"                          // DELAY_milliseconds
 #include <avr/io.h>                                                   // USB0 / USB_ENABLE_bm / USB_ATTACH_bm
+#include "mcc_generated_files/usb/usb_descriptors.h"                  // descriptorPointers / STRING_xxx
+#include <stddef.h>                                                   // wchar_t
 
 // 内部高周波発振器(OSCHF)の自動補正の切り替え (CLKCTRL.OSCHFCTRLA.AUTOTUNE, 保護レジスタ)
 static void setOscAutoTune(uint8_t autotune_gc)
@@ -29,6 +31,37 @@ static USB_CDC_LINE_CODING_t s_lineCoding __attribute__((aligned(2))) = {
     .bDataBits   = USB_CDC_LINE_CODING_8_DATA_BITS,
 };
 
+// 【製品名】MCC の既定は "CDC Class Demo"。ブラウザの機器の選択画面 (Web Serial) などに出るので機器の名前にする。
+// 生成コードは変えず、文字列記述子の並び (メーカー名 → 製品名 → シリアル番号) をここに持ち直して、
+// 製品名だけ差し替える。スタックは bLength をたどって次の文字列を探すので、3つを隙間なく並べること。
+// シリアル番号は MCC の既定 ("1") のまま (変えると Windows が別の機器として認識し、COM ポート番号が変わる)。
+#define PRODUCT_NAME  L"K-Logger"
+
+static struct {
+    USB_DESCRIPTOR_HEADER_t manufacturer_header;
+    wchar_t manufacturer[DESCRIPTOR_STRING_LENGTH(STRING_MANUFACTURER)];
+    USB_DESCRIPTOR_HEADER_t product_header;
+    wchar_t product[DESCRIPTOR_STRING_LENGTH(PRODUCT_NAME)];
+    USB_DESCRIPTOR_HEADER_t serial_header;
+    wchar_t serial[DESCRIPTOR_STRING_LENGTH(STRING_SERIAL)];
+} s_strings = {
+    .manufacturer_header = {
+        .bLength = sizeof(s_strings.manufacturer) + sizeof(USB_DESCRIPTOR_HEADER_t),
+        .bDescriptorType = USB_DESCRIPTOR_TYPE_STRING,
+    },
+    .manufacturer = STRING_MANUFACTURER,
+    .product_header = {
+        .bLength = sizeof(s_strings.product) + sizeof(USB_DESCRIPTOR_HEADER_t),
+        .bDescriptorType = USB_DESCRIPTOR_TYPE_STRING,
+    },
+    .product = PRODUCT_NAME,
+    .serial_header = {
+        .bLength = sizeof(s_strings.serial) + sizeof(USB_DESCRIPTOR_HEADER_t),
+        .bDescriptorType = USB_DESCRIPTOR_TYPE_STRING,
+    },
+    .serial = STRING_SERIAL,
+};
+
 static RETURN_CODE_t lineCodingRequestHandler(USB_SETUP_REQUEST_t *req)
 {
     if (USB_REQUEST_RECIPIENT_INTERFACE == (USB_REQUEST_RECIPIENT_t)req->bmRequestType.recipient &&
@@ -44,6 +77,7 @@ void USB_Comm_Initialize(void)
 {
     // USB デバイス層 (USBDevice_Initialize) は SYSTEM_Initialize() 済み。
     // ここでは CDC 仮想シリアルポート層のみ初期化する。
+    descriptorPointers.stringPtrs[0] = &s_strings.manufacturer_header; // 製品名を "K-Logger" に (ホストが文字列を読むのは attach の100ms以上後)
     USB_CDCVirtualSerialPortInitialize();
     USB_ClassRequestCallbackRegister(lineCodingRequestHandler); // CDCの要求処理を上書き登録
 

@@ -465,3 +465,9 @@ firmware/diag/
 
 # PyInstaller (build_exe.bat) の生成物
 software/python/*.spec
+
+# ブートローダ + ファームウェア + ヒューズの1ファイル (build_production_hex.py で作る)
+firmware/bootloader/hex/klogger_combined.hex
+# exe に同梱するために置く avrdude (配布物から入手する)
+software/python/avrdude.exe
+software/python/avrdude.conf

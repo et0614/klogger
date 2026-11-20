@@ -21,13 +21,15 @@ v2 からの主な変更点は以下のとおり（開発中）。
 
 ```
 docs/
+  index.html            ブラウザ版の操作ページ（GitHub Pages）
   images/               基板・3D外観画像
 hardware/
   BOM.xlsx              設計用部品表（JLCPCB部品番号・リンク付き）
   datasheets/           主要部品データシート（ファイル名=参照記号）
   pcb/                  Fusion設計データ(klogger.f3z)、回路図PDF
   fab/                  JLCPCB入稿データ（ガーバー、JLCPCB_BOM.xlsx、JLCPCB_CPL.xlsx）
-firmware/klogger.X/     MPLAB X プロジェクト（AVR64DU32, MCC Melody: klogger.mc3）
+firmware/klogger.X/     MPLAB X プロジェクト（AVR64DU32, MCC Melody: klogger.mc3）。アプリは 0x0A00 以降に置く
+firmware/bootloader/    USB ブートローダ（euboot）。USB でのファームウェア更新と、量産用の1ファイル化 (build_production_hex.py)
 software/python/        PCツール: klogger_gui.py（GUI）、klogger.py（コマンド版・通信ライブラリ）、build_exe.bat（exe化）
 v2/                     旧版 K-Logger v2 一式（凍結）
 ```
@@ -36,7 +38,7 @@ v2/                     旧版 K-Logger v2 一式（凍結）
 
 - 製品世代: K-Logger v3（v2 の後継）
 - 基板: 3.1（シルク表記「Version 3.1」。3.0 からはシルクのみ変更、履歴は `hardware/fab/README.md`）。修正ごとに 3.2, 3.3 … と上げる。リポジトリには最新版のみを置き、過去の版は Git の履歴で参照する
-- ファームウェア: 現在 3.1.0（`hello` 応答の `fw`。`firmware/klogger.X/version.h`）
+- ファームウェア: 現在 3.2.0（`hello` 応答の `fw`。`firmware/klogger.X/version.h`）
 
 ## 使い方
 
@@ -57,6 +59,9 @@ v2/                     旧版 K-Logger v2 一式（凍結）
 測距の分は記録間隔とタイミングバジェットにほぼ比例して減る。20ms は VL53L1X の最小値（short のみ）。50ms に比べて距離のばらつきは約2倍（近距離の標準偏差 約1mm → 約2mm）になり、遠い対象や強い外光では失敗が増えるが、扉の開閉の検出には影響しない。
 待機中（記録停止後）も約0.2mA 流れる（昇圧IC の自己消費 17µA が主。3.3V を保つ限り減らせない）。満充電でも約半年で空になるので、使わないときは電池を抜く。
 電流はクランプ電流計で、配線を5回巻いて測った（1回巻きでは1mA以下の精度が足りず、以前の「約0.5mA」は過小だった）。測距は1秒に1回の短いパルスなので、1秒ごとの読み取り値は、測距のパルスを含むかどうかで2つの値を行き来する（20ms で約0.2mA と約0.9mA）。平均はその読み取り値の平均で見る。
+
+### ブラウザ版
+パソコンの Chrome または Edge で https://et0614.github.io/klogger/ を開き、USB でつないで「接続」を押す（インストール不要）。記録の開始、CSV の保存（日ごとの v2 形式も可）、データの消去、ライブ表示、距離の校正、測距条件、自己診断ができる。ページは `docs/index.html`（Web Serial で USB の仮想 COM ポートを開く。GitHub Pages で main ブランチの `/docs` を公開する）。手元で試すときは `docs` で `python -m http.server` を実行して http://localhost:8000/ を開く（Web Serial は https か localhost でしか動かない）。
 
 ### PCツール（GUI）
 [Releases](https://github.com/et0614/klogger/releases) から `KLogger.exe` をダウンロードしてダブルクリックで起動する（Pythonは不要）。
@@ -90,9 +95,13 @@ python klogger.py calibrate 140     オフセット校正（対象物を140mmに
 python klogger.py tof --mode long --tb 33 --roi 8   測距条件の変更（--offset でオフセットを直接設定）
 python klogger.py selftest          自己診断
 python klogger.py clear             保存データの消去
+python klogger.py update xxx.hex    USB でファームウェアを更新（ブートローダで起動しておく）
 ```
 
-exeの作り方: `pip install pyinstaller` の後に `build_exe.bat` を実行すると `dist\KLogger.exe` ができる。
+exeの作り方: `pip install pyinstaller` の後に `build_exe.bat` を実行すると `dist\KLogger.exe` ができる。`software/python/` に `avrdude.exe` と `avrdude.conf`（avrdude 8.0 以降）を置いておくと exe に同梱され、Firmware タブでファームウェアを更新できる。
+
+### ファームウェアの更新（FW 3.2.0 以降）
+フラッシュの先頭 2.5 KB に USB ブートローダ（euboot）を置き、ファームウェアは `0x0A00` 以降に置く。電池と USB を外し、ボタンを押したまま USB をつなぐとブートローダに入る（LED がブートローダの点滅になったら離す）。PCツールの Firmware タブ（または `klogger.py update`、`avrdude`）で書き換える。3.1.x 以前（ブートローダなし）の機体は、初回だけ PICkit で `firmware/bootloader/hex/klogger_combined.hex` を書き込む。詳細は [firmware/bootloader/README.md](firmware/bootloader/README.md)。
 
 ### 記録データ形式
 1レコード2バイト（W25Q128に連続保存、16MBで約838万件＝1秒間隔で約97日）。
